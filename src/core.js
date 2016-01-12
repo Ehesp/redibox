@@ -113,6 +113,7 @@ class RediBox {
         // all cluster instances, masters & slaves.
         // MOOREEE POWAAAHHH >=]
         this.client_read = new Redis.Cluster(this.options.redis.hosts, {readOnly: true, ...this.options.redis});
+        this.client_read.readOnly = true;
         // wait for ready event
         this.client_read.once('ready', () => {
           defineLuaCommands(this.client_read).then(reportReady);

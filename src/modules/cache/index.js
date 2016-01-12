@@ -30,6 +30,7 @@ import { noop, isFunction, nodify, mergeDeep } from './../../helpers';
 export default class Cache {
 
   constructor(options, rdb) {
+    this.rdb = rdb;
     this.options = {
       enabled: true,
       defaultTTL: 6000,
@@ -66,18 +67,7 @@ export default class Cache {
    */
   get(key, callback, masterOnly = false) {
     return nodify(new Promise((resolve, reject) => {
-      let client;
-      let usedSlaveRead = false;
-
-      if (this.canUseReadScaleClient() && !masterOnly) {
-        usedSlaveRead = true;
-        client = this.client_read;
-      } else if (this.connectionOK()) {
-        client = this.client;
-      } else {
-        return reject(new Error('Redis not connected or ready.'));
-      }
-
+      const client = this.rdb.getReadOnlyClient();
       client
         .get(this.toKey(key))
         .then(function (value) {
@@ -92,7 +82,7 @@ export default class Cache {
           }
         })
         .catch((getError) => {
-          if (getError && usedSlaveRead) {
+          if (getError && client.readOnly) {
             // reading via slave caused an error, lets try the master client just once.
             return this.get(key, resolve, true); // todo callback/resolve issue here
           }
@@ -113,7 +103,7 @@ export default class Cache {
    * @returns {*} No Returns.
    */
   set(key, val, ttl, callback = noop) {
-    if (!this.connectionOK()) {
+    if (!this.rdb.connectionOK()) {
       return callback(new Error('Redis not connected or ready.'));
     }
 
@@ -131,13 +121,15 @@ export default class Cache {
     }
 
     // this.client.setnxex(this.toKey(key), ttl || this.options.defaultTTL, val, (setnxexError, result) => {
-    this.client.set(this.toKey(key), val, 'NX', 'EX', ttl || this.options.defaultTTL, (setnxexError, result) => {
-      if (setnxexError) {
-        this.redisError(setnxexError);
-        return callback(setnxexError);
-      }
-      return callback(null, result);
-    });
+    this.rdb
+        .getClient()
+        .set(this.toKey(key), val, 'NX', 'EX', ttl || this.options.defaultTTL, (setnxexError, result) => {
+          if (setnxexError) {
+            this.redisError(setnxexError);
+            return callback(setnxexError);
+          }
+          return callback(null, result);
+        });
 
     return this;
   }
@@ -149,10 +141,13 @@ export default class Cache {
    * @returns {*} No Returns
    */
   del(key, callback = noop) {
-    if (!this.connectionOK()) {
+    if (!this.rdb.connectionOK()) {
       return callback(new Error('Redis not connected or ready.'));
     }
-    this.client.del(this.toKey(key), callback);
+    this.rdb
+        .getClient()
+        .del(this.toKey(key), callback);
+
     return this;
   }
 
@@ -160,13 +155,8 @@ export default class Cache {
    * Support our legacy apps (more for me really, sorry!)
    */
   wrap = deprecate(function () {
-    // just passing in `arguments` makes v8 skip optimisation,
-    // hence this. don't hate me
-    const args = new Array(arguments.length);
-    for (let i = 0; i < args.length; ++i) {
-      args[i] = arguments[i];
-    }
-    return this.wrapWaterline(args);
+    'use strict';
+    return this.wrapWaterline.apply(null, arguments);
   }, 'Cache.wrap is deprecated, please use a specific wrap function, i.e wrapWaterline or wrapPromise');
 
   /**
@@ -275,33 +265,35 @@ export default class Cache {
       key = '';
     }
 
-    this.client.keys(`${this.toKey(key)}*`, (keysError, data) => {
-      if (keysError) {
-        this.redisError(keysError);
-        return callback(keysError);
-      }
-
-      let count = data.length;
-
-      if (count === 0) {
-        // nothing to delete
-        return callback();
-      }
-
-      // todo multi del
-      data.forEach((keyItem) => {
-        this.del(keyItem, (error) => {
-          if (error) {
-            count = 0;
-            this.redisError(error);
-            return callback(error);
+    this.rdb
+        .getClient()
+        .keys(`${this.toKey(key)}*`, (keysError, data) => {
+          if (keysError) {
+            this.redisError(keysError);
+            return callback(keysError);
           }
-          if (count - 1 === 0) {
-            callback(null, null);
+
+          let count = data.length;
+
+          if (count === 0) {
+            // nothing to delete
+            return callback();
           }
+
+          // todo multi del
+          data.forEach((keyItem) => {
+            this.del(keyItem, (error) => {
+              if (error) {
+                count = 0;
+                this.redisError(error);
+                return callback(error);
+              }
+              if (count - 1 === 0) {
+                callback(null, null);
+              }
+            });
+          });
         });
-      });
-    });
   }
 
   /**
