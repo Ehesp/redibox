@@ -1,0 +1,56 @@
+{
+  "name": "redibox",
+  "description": "Ultimate redis toolbox for node, featuring caching, clusters, cluster scaled slave reads, locks, throttling, additional new command (via lua scripts) and more features! Built in ES6/ES7",
+  "version": "0.1.0",
+  "main": "lib/core.js",
+  "author": "salakar",
+  "repository": "redibox/redibox",
+  "license": "MIT",
+  "engines": {
+    "node": ">=4.0.0"
+  },
+  "scripts": {
+    "compile": "NODE_ENV=production babel src --out-dir lib",
+    "build": "babel src --out-dir lib",
+    "coveralls": "cat ./coverage/lcov.info | coveralls",
+    "prepublish": "npm run compile",
+    "test": "babel-node ./node_modules/.bin/isparta cover _mocha "
+  },
+  "devDependencies": {
+    "babel-cli": "^6.4.0",
+    "babel-core": "^6.4.0",
+    "babel-eslint": "^4.1.6",
+    "babel-plugin-add-module-exports": "^0.1.2",
+    "babel-plugin-syntax-async-functions": "^6.3.13",
+    "babel-plugin-syntax-class-properties": "^6.3.13",
+    "babel-plugin-syntax-decorators": "^6.3.13",
+    "babel-plugin-syntax-export-extensions": "^6.3.13",
+    "babel-plugin-syntax-flow": "^6.3.13",
+    "babel-plugin-syntax-function-bind": "^6.3.13",
+    "babel-plugin-transform-class-properties": "^6.4.0",
+    "babel-plugin-transform-decorators": "^6.4.0",
+    "babel-plugin-transform-es2015-arrow-functions": "^6.4.0",
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.4.0",
+    "babel-plugin-transform-export-extensions": "^6.4.0",
+    "babel-plugin-transform-flow-strip-types": "^6.4.0",
+    "babel-plugin-transform-function-bind": "^6.3.13",
+    "babel-plugin-transform-object-rest-spread": "^6.3.13",
+    "babel-plugin-transform-regenerator": "^6.3.26",
+    "babel-plugin-typecheck": "^3.6.1",
+    "babel-preset-es2015-node4": "^2.0.2",
+    "benchmark": "^2.0.0",
+    "chai": "^3.4.1",
+    "chai-as-promised": "^5.2.0",
+    "coveralls": "^2.11.6",
+    "eslint": "^1.10.3",
+    "install": "^0.4.1",
+    "isparta": "^4.0.0",
+    "mocha": "^2.3.4",
+    "npm": "^3.5.3",
+    "sinon": "^1.17.2"
+  },
+  "dependencies": {
+    "ioredis": "^1.14.0",
+    "winston": "^2.1.1"
+  }
+}

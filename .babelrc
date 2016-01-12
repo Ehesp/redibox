@@ -1,0 +1,32 @@
+{
+  "presets": ["es2015-node4"],
+  "env": {
+    "production": {
+      "compact": false,
+      "comments": false
+    }
+  },
+  "plugins": [
+    ["typecheck", {
+      "disable": {
+        "production": true
+      }
+    }],
+    "syntax-flow",
+    "transform-flow-strip-types",
+    "syntax-function-bind",
+    "transform-function-bind",
+    "syntax-class-properties",
+    "transform-class-properties",
+    "syntax-async-functions",
+    "transform-es2015-arrow-functions",
+    "transform-object-rest-spread",
+    "transform-regenerator",
+    "syntax-decorators",
+    "transform-decorators",
+    "syntax-export-extensions",
+    "transform-export-extensions",
+    "transform-es2015-modules-commonjs",
+    "add-module-exports"
+  ]
+}
