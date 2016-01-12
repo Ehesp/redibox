@@ -41,7 +41,8 @@ Ultimate redis toolbox for node. Built using ES6/ES7 features.
        // into this:
        RediBox.mycommand('key', 'arg1','arg2').then().catch();
        ```
-  - :large_orange_diamond: **Time Series** want pretty stats and graphs? This will generate hits and allow easy query of data with range filtering.
+
+ - :large_orange_diamond: **Time Series** want pretty stats and graphs? This will generate hits and allow easy query of data with range filtering.
 
 ## Getting Started
 
