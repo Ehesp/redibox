@@ -2,6 +2,14 @@ var Benchmark = require('benchmark');
 var suite = new Benchmark.Suite();
 var RediBox = require('./../lib').default;
 
+/**
+ * These benchmarks require a cluster running locally:
+ * Just type the following commands using the redis create-cluster script
+ * which can be found in the redis download archive under utils/create-cluster.
+ *    1) create-cluster start
+ *    2) create-cluster create
+ */
+
 var Cache = new RediBox({
   redis: {
     cluster: true,
