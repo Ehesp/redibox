@@ -14,11 +14,11 @@ Ultimate redis toolbox for node. Built using ES6/ES7 features and as lightweight
 ## Planned Features
  - :white_check_mark: **[Caching](/src/modules/cache/README.md)**, including easy wrapper helpers, e.g `wrapPromise`, `wrapWaterlineQuery` (for sails), `wrapExpressRequest`
  - :white_check_mark: **Redis Clusters** with optional cluster scaled slave reads.
- - :white_medium_square: **Distributed Locks** using Redlock algorithm `acquire`, `release`, `renew` locks.
+ - :white_medium_square: **Distributed Locks** using the [Redlock](http://redis.io/topics/distlock) algorithm to `acquire`, `release` and `renew` locks.
  - :white_medium_square: **Throttling**, limit something to X times per Y time period with one easy call, for example: api requests.
  - :large_orange_diamond: Custom **LUA Commands**
  - :large_orange_diamond: **Time Series** want pretty stats and graphs? This will generate hits and allow easy querying of data with timestamp based range filtering.
- - :white_check_mark: Indexes - http://redis.io/topics/indexes wrappers for to aid using redis as a secondary index or for things like autocompletion.
+ - :white_check_mark: Indexes - http://redis.io/topics/indexes wrappers to aid using redis as a secondary index or for things like autocompletion.
 
 ## Getting Started
 
