@@ -25,17 +25,17 @@
  */
 
 import {  deprecate } from 'util';
-import { noop, isFunction, nodify } from './../../helpers';
+import { noop, isFunction, nodify, mergeDeep } from './../../helpers';
 
 export default class Cache {
 
   constructor(options, rdb) {
-    Object.assign(this, { options, rdb });
-    Object.assign(this.options, {
+    this.options = {
       enabled: true,
       defaultTTL: 6000,
       prefix: 'rdb:cache'
-    });
+    };
+    mergeDeep(this.options, options);
   }
 
   /**
@@ -44,7 +44,7 @@ export default class Cache {
    * @returns {string}
    */
   toKey(key) {
-    return `cache:${this.options.prefix}:${key || ''}`;
+    return `${this.options.prefix}:${key || ''}`;
   }
 
   /**
