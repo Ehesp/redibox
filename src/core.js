@@ -29,6 +29,7 @@ import { inherits } from 'util';
 import { EventEmitter } from 'events';
 import { defineLuaCommands } from './modules/lua';
 import { after, mergeDeep, once, noop, isFunction, nodify, createLogger } from './helpers';
+import Cache from './modules/cache';
 
 class RediBox {
 
@@ -69,6 +70,7 @@ class RediBox {
 
     // setup new logger
     this.log = createLogger(this.options.log);
+    this.cache = new Cache(this.options.cache || {}, this);
 
     // because once is more than enough ;p
     const callBackOnce = once(readyCallback);

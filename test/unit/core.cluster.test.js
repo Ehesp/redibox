@@ -12,7 +12,6 @@ import RediBox from './../../src';
  */
 
 describe('core cluster', () => {
-
   it('Should connect to a cluster and create an additional READONLY client for slave scaled reads.', function (done) {
     this.timeout(9000);
     const client = new RediBox({
@@ -48,6 +47,7 @@ describe('core cluster', () => {
         ]
       }
     }, function (err, cluster) {
+      console.dir(client.cache);
       assert.equal(cluster.client, 'ready');
       // check read client was created also in this instance
       assert.equal(cluster.client_read, 'ready');

@@ -1,79 +1,85 @@
-var Benchmark = require('benchmark');
-var suite = new Benchmark.Suite();
-var RediBox = require('./../lib').default;
+const Benchmark = require('benchmark');
+const suite = new Benchmark.Suite();
+const Rbox = require('./../lib').default;
 
 /**
- * These benchmarks require a cluster running locally:
+ * To use a cluster,
  * Just type the following commands using the redis create-cluster script
  * which can be found in the redis download archive under utils/create-cluster.
  *    1) create-cluster start
  *    2) create-cluster create
+ * and then add in the below config,
+ * ```
+ redis: {
+        cluster: true,
+        clusterScaleReads: true,
+        connectionTimeout: 12000,
+        hosts: [
+          {
+            host: '127.0.0.1',
+            port: 30001
+          },
+          {
+            host: '127.0.0.1',
+            port: 30002
+          },
+          {
+            host: '127.0.0.1',
+            port: 30003
+          },
+          {
+            host: '127.0.0.1',
+            port: 30004
+          },
+          {
+            host: '127.0.0.1',
+            port: 30005
+          },
+          {
+            host: '127.0.0.1',
+            port: 30006
+          }
+        ]
+      },
+ ```
  */
 
-var Cache = new RediBox({
-  redis: {
-    cluster: true,
-    clusterScaleReads: true,
-    connectionTimeout: 12000,
-    hosts: [
-      {
-        host: '127.0.0.1',
-        port: 30001
-      },
-      {
-        host: '127.0.0.1',
-        port: 30002
-      },
-      {
-        host: '127.0.0.1',
-        port: 30003
-      },
-      {
-        host: '127.0.0.1',
-        port: 30004
-      },
-      {
-        host: '127.0.0.1',
-        port: 30005
-      },
-      {
-        host: '127.0.0.1',
-        port: 30006
-      }
-    ]
-  },
+// create new instance of RediBox
+const RediBox = new Rbox({
   log: {
     level: 'verbose'
   }
-}, function (err) {
-  if (err)
-    throw err;
-  // add tests
-  suite.add('Cache Get', {
+});
 
-    // a flag to indicate the benchmark is deferred
+RediBox.on('error', function (error) {
+  RediBox.log.error(error);
+});
+
+RediBox.on('ready', function (status) {
+  RediBox.log.info(`Client status is: ${status.client}`);
+
+  if (status.client_read) {
+    RediBox.log.info(`Client status is: ${status.client}`);
+  }
+
+  RediBox.log.info(`Adding Benchmark 'RediBox Cache Get'`);
+  suite.add('RediBox Cache Get', {
     defer: true,
-
-    // benchmark test function
     fn: function (deferred) {
-      // call `Deferred#resolve` when the deferred test is finished
-      Cache.get(Math.random()).then(() => {
-        deferred.resolve()
+      RediBox.cache.get(123456).then(() => {
+        deferred.resolve();
       }).catch(function (err) {
-        console.dir(err);
+        deferred.resolve(err);
+        RediBox.log.error(err);
       });
     }
   });
 
-  suite.add('Cache Set NX EX', {
-
-    // a flag to indicate the benchmark is deferred
+  RediBox.log.info(`Adding Benchmark 'RediBox Cache Set'`);
+  suite.add('RediBox Cache Set', {
     defer: true,
-
-    // benchmark test function
     fn: function (deferred) {
-      // call `Deferred#resolve` when the deferred test is finished
-      Cache.set(123456, 45678, () => {
+      RediBox.cache.set(123456, 45678, () => {
         deferred.resolve();
       });
     }
@@ -81,18 +87,14 @@ var Cache = new RediBox({
 
   // add listeners
   suite.on('cycle', function (event) {
-    console.log(String(event.target));
+    RediBox.log.info(String(event.target));
   });
 
   suite.on('complete', function () {
-    console.log('Fastest is ' + this.filter('fastest').map('name'));
+    RediBox.log.info('\nFastest is ' + this.filter('fastest').map('name'));
     process.exit();
   });
 
-  // run async
-  suite.run({async: false});
-});
-
-Cache.on('error', function (error) {
-  console.log(error);
+  RediBox.log.info(`Starting Benchmarks: \n`);
+  suite.run({async: true});
 });

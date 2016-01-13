@@ -11,7 +11,7 @@
 
 Ultimate redis toolbox for node. Built using ES6/ES7 features and as lightweight as possible with just 2 dependencies, ioredis and winston.
 
-## Planned Features
+## What can you do with RediBox?
  - :white_check_mark: **[Caching](/src/modules/cache/README.md)**, including easy wrapper helpers, e.g `wrapPromise`, `wrapWaterlineQuery` (for sails), `wrapExpressRequest`
  - :white_check_mark: **Redis Clusters** with optional cluster scaled slave reads.
  - :white_medium_square: **Distributed Locks** using the [Redlock](http://redis.io/topics/distlock) algorithm to `acquire`, `release` and `renew` locks.
@@ -33,7 +33,7 @@ npm install redibox
 And include in your project:
 
 ```javascript
-import Redibox from 'redibox'; 
+import Redibox from 'redibox';
 const rediBox = new RediBox({
   redis: {
     port: 7777
@@ -55,7 +55,7 @@ rediBox.on('error' function(error) {
 ## RediBox Core
 
 #### RediBox.quit();
-Force close all redis client connections without waiting for any pending replies. 
+Force close all redis client connections without waiting for any pending replies.
 
 #### RediBox.disconnect();
 Close all redis client connections but wait for any pending replies first.
