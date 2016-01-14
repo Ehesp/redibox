@@ -3,7 +3,7 @@ const suite = new Benchmark.Suite();
 const Rbox = require('./../lib').default;
 
 /**
- * To use a cluster,
+ * To benchmark with a local cluster,
  * Just type the following commands using the redis create-cluster script
  * which can be found in the redis download archive under utils/create-cluster.
  *    1) create-cluster start
