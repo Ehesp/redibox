@@ -97,7 +97,7 @@ Returns the connection state of the redis client provided.
 
 ## Module Documentation
 
- - [Cache] (/src/modules/cache/README.md)
+ - [Cache](/src/modules/cache/README.md)
 
 
 
