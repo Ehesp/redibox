@@ -28,7 +28,7 @@ Pre-alpha so not quite usable yet. Come back in a few days :)
 Install it via npm:
 
 ```shell
-npm install redibox
+npm install redibox --save
 ```
 
 And include in your project:
