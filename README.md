@@ -12,7 +12,7 @@ Ultimate redis toolbox for node. Built using ES6/ES7 features and as lightweight
 
 ## What can you do with RediBox?
 
-RediBox offers out of the box support for many of the common Redis [use cases](#module-documentation). Not only that,
+RediBox offers out of the box support for many of the common Redis [use cases](#use-cases-and-modules). Not only that,
 it also provides easy wrappers / utilities around redis client connection monitoring, scaling cluster reads with [`READONLY`](http://redis.io/commands/readonly)
 and error handling.
 
