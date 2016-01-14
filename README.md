@@ -21,6 +21,8 @@ and error handling.
  - **Redis Clusters** with optional cluster scaled slave reads.
  - Custom **LUA Command** bootstrapping.
 
+To see docs for each of the individual features see the [use cases](#use-cases-and-modules) section.
+
 ## Getting Started
 
 Install via npm:
