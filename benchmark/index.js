@@ -58,6 +58,9 @@ RediBox.on('error', function (error) {
 RediBox.on('ready', function (status) {
   RediBox.log.info(`Client status is: ${status.client}`);
 
+  //console.dir(RediBox.throttle.seconds(60));
+  //console.dir(RediBox.throttle.months(12));
+
   if (status.client_read) {
     RediBox.log.info(`Client status is: ${status.client}`);
   }
