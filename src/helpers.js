@@ -104,7 +104,7 @@ export function nodify(promise, callback) {
 }
 
 /**
- * Returns a new instance of winston logger with console transport.
+ * Returns a new instance of winston logger with console transport only.
  * @param {Object} options logging level, defaults to warn
  * @returns {Logger} Winston Logger
  */
@@ -142,6 +142,13 @@ export function mergeDeep(target, source) {
   }
 }
 
+
+/**
+ * Crude function to require all module folders in /modules.
+ *  - Only runs once on startup.
+ * TODO : cleanup/optimise
+ * @param options
+ */
 export function requireModules(options) {
   const dirName = options.dirName || `${__dirname}/modules`;
   const moduleLoader = options.moduleLoader || noop;
