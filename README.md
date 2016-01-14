@@ -23,9 +23,7 @@ and error handling.
 
 ## Getting Started
 
-Pre-alpha so not quite usable yet. Come back in a few days :)
-
-Install it via npm:
+Install via npm:
 
 ```shell
 npm install redibox --save
