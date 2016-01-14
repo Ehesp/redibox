@@ -54,7 +54,7 @@ export default class Cache {
    * Toggles by default or pass in true/false
    * @param bool
    */
-  bypassCache(bool) {
+  bypass(bool) {
     this.options.enabled = bool || !this.options.enabled;
   }
 
@@ -281,7 +281,7 @@ export default class Cache {
             return callback();
           }
 
-          // todo multi del
+          // todo multi del only if not in cluster mode
           data.forEach((keyItem) => {
             this.del(keyItem, (error) => {
               if (error) {
@@ -362,7 +362,7 @@ export default class Cache {
    * @param object
    * @returns {*}
    */
-  makeKeyFromObject(prefix:string = 'Prefix', object = {}) {
+  makeKeyFromObject(prefix:string = '', object = {}) {
     const criteria = JSON
       .stringify(object)
       .replace(/\W+/g, '')

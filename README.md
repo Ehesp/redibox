@@ -103,7 +103,7 @@ Returns the connection state of the redis client provided.
  - **Distributed Locks** using the [Redlock](http://redis.io/topics/distlock) algorithm to `acquire`, `release` and `renew` locks.
  - **Throttling**, limit something to X times per Y time period with one easy call, for example: api requests.
  - **Time Series** want pretty stats and graphs? This will generate hits and allow easy querying of data with timestamp based range filtering.
- - Indexes - http://redis.io/topics/indexes wrappers to aid using redis as a secondary index or for things like autocompletion.
+ - **Indexes** - http://redis.io/topics/indexes wrappers to aid using redis as a secondary index.
 
 
 ## Contributing

@@ -24,7 +24,7 @@
  *
  */
 
-import { mergeDeep } from './../../helpers';
+import {mergeDeep} from './../../helpers';
 
 export default class Indices {
 
@@ -38,3 +38,9 @@ export default class Indices {
   }
 
 }
+const key = RediBox.cache.makeKeyFromObject('Cats', {
+  name: 'Evie',
+  likes: 'belly rubs'
+});
+
+console.log(key); //
