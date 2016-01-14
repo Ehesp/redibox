@@ -43,27 +43,25 @@ export default class Throttle {
    * entities remaining limit and if still within limit it returns ok to proceed
    * You can route all your throttled 'things' through here.
    * @param entity
-   * @param limit
-   * @param time
+   * @param limits
    * @param callback
    * @returns {*}
    */
-  proceed(entity, limit, time, callback) {
+  proceed(entity, limits, callback) {
     return nodify(new Promise((resolve, reject)=> {
       resolve(this.enabled); // TODO
     }), callback);
   }
 
-	/**
-   * Returns the current limits for the specified entity
+  /**
+   * Returns the current limits or sanctions for the specified entity
    * without costing a transaction.
    * @param entity
-   * @param limit
-   * @param time
+   * @param limits
    * @param callback
    * @returns {*}
-	 */
-  ready(entity, limit, time, callback) {
+   */
+  read(entity, limits, callback) {
     return nodify(new Promise((resolve, reject)=> {
       resolve(this.enabled); // TODO
     }), callback);
@@ -100,7 +98,7 @@ export default class Throttle {
   }
 
   /**
-   * Sanction an entity, i.e you breached the limit X time so now we'll punish
+   * Sanction an entity, i.e you breached the limit X times so now we'll punish
    * the entity and reject all transactions for X duration.
    * @param entity
    * @param duration
@@ -117,5 +115,60 @@ export default class Throttle {
    */
   absolve(entity, callback) {
     return this.rdb.getClient().absolve(entity, callback);  // TODO LUA
+  }
+
+
+  // TODO move to decorator so we can have these on cache and other time reliant modules like time series
+  /**
+   *
+   * @param s
+   * @returns {number}
+   */
+  seconds(s) {
+    return s * 1000;
+  }
+
+  /**
+   *
+   * @param m
+   * @returns {number}
+   */
+  minutes(m) {
+    return m * this.seconds(60);
+  }
+
+  /**
+   * Returns hours in ms
+   * @param h
+   * @returns {number}
+   */
+  hours(h) {
+    return h * this.minutes(60);
+  }
+
+  /**
+   *
+   * @param d
+   */
+  days(d) {
+    return d * this.hours(24);
+  }
+
+  /**
+   *
+   * @param w
+   * @returns {number}
+   */
+  weeks(w) {
+    return w * this.days(7);
+  }
+
+	/**
+   *
+   * @param m
+   * @returns {number}
+   */
+  months(m) {
+    return m * this.weeks(4);
   }
 }
