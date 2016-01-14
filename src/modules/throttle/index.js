@@ -24,16 +24,17 @@
  *
  */
 
-import util from 'util';
-import { EventEmitter } from 'events';
+import { mergeDeep } from './../../helpers';
 
-export default class index {
+export default class Throttle {
 
-	constructor() {
-
-	}
+  constructor(options, rdb) {
+    this.rdb = rdb;
+    this.options = {
+      enabled: true
+    };
+    mergeDeep(this.options, options);
+    this.rdb.log.verbose(`${this.constructor.name} module has been mounted!`);
+  }
 
 }
-
-util.inherits(index, EventEmitter);
-export default index;
