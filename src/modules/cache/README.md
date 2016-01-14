@@ -59,7 +59,7 @@ Now before we get to the goodies, there is of course the usual `set`, `get`, `de
  - Deletes a cached item from redis.
 
 ##### RediBox.cache.clear([Optional] key: string, [Optional] cb: Function) : [Optional] Promise
- - Deletes all cache items or all items matching a cache key pattern prefix e.g. `users:*`
+ - Deletes all cache items or all items matching a cache key pattern prefix e.g. `cats:fluffy:*`
 
 
 ### Utilities
@@ -67,7 +67,7 @@ Now before we get to the goodies, there is of course the usual `set`, `get`, `de
 And now for the goodies! To save yourself repeating the logical steps mentioned earlier, you can use these caching utilities!
 
 ##### RediBox.cache.wrapPromise(key: string, promise: Promise, [Optional] ttl, [Optional] skipCache: boolean): Promise
- - Wraps a promise for the purposes of caching a successful result.
+ - Wraps a promise for the purposes of caching a successful resolve.
 
 Usage example:
 ```javascript
