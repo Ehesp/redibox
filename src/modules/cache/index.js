@@ -24,7 +24,7 @@
  *
  */
 
-import {  deprecate } from 'util';
+import { deprecate } from 'util';
 import { noop, isFunction, nodify, mergeDeep } from './../../helpers';
 
 export default class Cache {
@@ -37,6 +37,7 @@ export default class Cache {
       prefix: 'rdb:cache'
     };
     mergeDeep(this.options, options);
+    this.rdb.log.verbose(`${this.constructor.name} module has been mounted!`);
   }
 
   /**
