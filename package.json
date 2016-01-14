@@ -1,14 +1,32 @@
 {
   "name": "redibox",
-  "description": "Ultimate redis toolbox for node, featuring caching, clusters, cluster scaled slave reads, locks, throttling, additional new command (via lua scripts) and more features! Built in ES6/ES7",
+  "description": "Ultimate redis toolbox for node, featuring caching, clusters, cluster scaled slave reads, locks, throttling, additional new commands (via lua scripts) and more features! Built in ES6/ES7",
   "version": "0.1.0",
   "main": "lib/core.js",
-  "author": "salakar",
-  "repository": "redibox/redibox",
+  "author": "Mike Diarmid",
+  "repository": "salakar/redibox",
   "license": "MIT",
   "engines": {
     "node": ">=4.0.0"
   },
+  "keywords": [
+    "redis",
+    "redis-cluster",
+    "cluster",
+    "waterline",
+    "sails",
+    "cache",
+    "throttle",
+    "throttling",
+    "timeseries",
+    "autocomplete",
+    "indexes",
+    "indices",
+    "lock",
+    "redlock",
+    "lua",
+    "ioredis"
+  ],
   "scripts": {
     "compile": "NODE_ENV=production babel src --out-dir lib",
     "build": "babel src --out-dir lib",
