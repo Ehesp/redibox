@@ -93,7 +93,7 @@ Returns a read/write redis client.
 #### static RediBox.isClientConnected(client);
 Returns the connection state of the redis client provided.
 
-## Module Documentation
+## Use Cases and Modules
 
  - [Cache](/src/modules/cache/README.md)
 
