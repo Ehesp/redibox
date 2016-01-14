@@ -108,9 +108,10 @@ Returns the connection state of the redis client provided.
 
 ## Contributing
 
-Full contributing guidelines are to be written, however please ensure you follow the points when sending in PRs:
+Full contributing guidelines are to be written, however please ensure you follow these points when sending in PRs:
 
 - Ensure no lint warns occur via `npm run lint`.
+- Implement tests for new features/functionality.
 
 
 ## License
