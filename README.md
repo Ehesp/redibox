@@ -102,10 +102,10 @@ Returns the connection state of the redis client provided.
 
 
 ## Upcoming Features / TODO
- - **Distributed Locks** using the [Redlock](http://redis.io/topics/distlock) algorithm to `acquire`, `release` and `renew` locks.
- - **Throttling**, limit something to X times per Y time period with one easy call, for example: api requests.
- - **Time Series** want pretty stats and graphs? This will generate hits and allow easy querying of data with timestamp based range filtering.
- - **Indexes** - http://redis.io/topics/indexes wrappers to aid using redis as a secondary index.
+ - **Distributed Locks** using the [Redlock](http://redis.io/topics/distlock) algorithm to `acquire`, `release` and `renew` locks. (base module already setup)
+ - **Throttling**, limit something to X times per Y time period with one easy call, for example: api requests. (base module already setup)
+ - **Time Series** want pretty stats and graphs? This will generate hits and allow easy querying of data with timestamp based range filtering. (base module already setup)
+ - **Indexes** - http://redis.io/topics/indexes wrappers to aid using redis as a secondary index. (base module already setup)
  - Allow userland to load in their own modules via the module loader.
 
 
@@ -118,7 +118,7 @@ Full contributing guidelines are to be written, however please ensure you follow
 - Use verbose logging throughout for ease of debugging issues, see core.js for example.
 - New modules should follow the same format as the others, these get magically bootstrapped by the loader.
 
-The **todo** modules above have all been created, structured and ready to go, just needs the methods etc adding onto the classes. To add custom lua scripts to the modules simply create a `scripts.js` (see Cache module one for layout) file in the root of the module, the module loader will automatically define the commands onto the clients, neat!
+To add custom lua scripts to the modules simply create a `scripts.js` file (see the Cache module one for the layout) in the root of the module, the module loader will automatically define the commands on the clients, neat!
 
 If you're creating a fresh module that's not in the todo list above, the simple copy one of the other modules and away you go, simples!
 
