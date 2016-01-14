@@ -25,6 +25,7 @@
  */
 
 import { Logger, transports } from 'winston';
+import { readdirSync, statSync } from 'fs';
 
 /**
  * @description Quick implementation of lodash's 'after' function
@@ -141,3 +142,27 @@ export function mergeDeep(target, source) {
   }
 }
 
+export function requireModules(options) {
+  const dirName = options.dirName || `${__dirname}/modules`;
+  const moduleLoader = options.moduleLoader || noop;
+  const scriptLoader = options.scriptLoader || noop;
+  readdirSync(dirName).forEach(function (file) {
+    const filePath = dirName + '/' + file;
+    if (statSync(filePath).isDirectory() && !filePath.match(/modules\/.+\/.+\//)) {
+      requireModules({
+        dirName: filePath,
+        moduleLoader,
+        scriptLoader
+      });
+    } else {
+      const matchModule = filePath.match(/\/([a-zA-Z]+)\/index\.js$/);
+      const matchScripts = filePath.match(/\/([a-zA-Z]+)\/scripts\.js$/);
+      if (matchModule) {
+        moduleLoader(matchModule[1], require(filePath).default);
+      }
+      if (matchScripts) {
+        scriptLoader(matchScripts[1], require(filePath).default);
+      }
+    }
+  });
+}
