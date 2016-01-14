@@ -50,16 +50,16 @@ For example:
 Now before we get to the goodies, there is of course the usual `set`, `get`, `del` and `clear` cache commands:
 
 ##### RediBox.cache.get(key: string, [Optional] cb: Function) : [Optional] Promise
-Gets a cached item from redis.
+ - Gets a cached item from redis.
 
 ##### RediBox.cache.set(key: string, value: string|Object|etc, [Optional] ttl, [Optional] cb: Function): [Optional] Promise
-Create a new cached item in redis.
+ - Create a new cached item in redis.
 
 ##### RediBox.cache.del(key: string, [Optional] cb: Function) : [Optional] Promise
-Deletes a cached item from redis.
+ - Deletes a cached item from redis.
 
 ##### RediBox.cache.clear([Optional] key: string, [Optional] cb: Function) : [Optional] Promise
-Deletes all cache items or all items matching a cache key pattern prefix e.g. `users:*`
+ - Deletes all cache items or all items matching a cache key pattern prefix e.g. `users:*`
 
 
 ### Utilities
@@ -67,7 +67,7 @@ Deletes all cache items or all items matching a cache key pattern prefix e.g. `u
 And now for the goodies! To save yourself repeating the logical steps mentioned earlier, you can use these caching utilities!
 
 ##### RediBox.cache.wrapPromise(key: string, promise: Promise, [Optional] ttl, [Optional] skipCache: boolean): Promise
-Wraps a promise for the purposes of caching a successful result.
+ - Wraps a promise for the purposes of caching a successful result.
 
 Usage example:
 ```javascript
@@ -81,7 +81,7 @@ The optional 4th param, `skipCache`, allows you to bypass caching and just exec 
 
 ##### RediBox.cache.wrapWaterline(waterlineQuery: Query, [Optional] ttl, [Optional] key: string, [Optional] skipCache: boolean): Promise
 
-Cache wrap a sails.js / waterline query. Obviously if you don't know what these are then this is of no use to you :).
+ - Cache wrap a sails.js / waterline query. Obviously if you don't know what these are then this is of no use to you :).
 
 Note that this time the key is optional! So what does it call the cache key name? The cache key name is generated using
 a mix of the `model` name (if available, depends on adapter) and the query criteria. See the example for the key format.
@@ -106,7 +106,7 @@ a mix of the `model` name (if available, depends on adapter) and the query crite
 Internally if not found in cache then RediBox will execute the query, cache it and return the results.
 
 ##### RediBox.cache.makeKeyFromObject([Optional] prefix: string, object: Object): String
-Just a simple utility to turn an object into a pretty key name.
+ - Just a simple utility to turn an object into a pretty key name.
 
 Example:
 ```javascript
