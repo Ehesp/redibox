@@ -68,7 +68,7 @@ export default class Cache {
    */
   get(key, callback, masterOnly = false) {
     return nodify(new Promise((resolve, reject) => {
-      const client = this.rdb.getReadOnlyClient();
+      const client = this.rdb.getReadOnlyClient(masterOnly);
       client
         .get(this.toKey(key))
         .then(function (value) {
@@ -193,7 +193,7 @@ export default class Cache {
         });
       };
 
-      if (skipCache || !this.options.enabled || ARG_DISABLE) {
+      if (skipCache || !this.options.enabled) {
         // just go straight to running the query
         return runQuery(null, true);
       }
@@ -236,7 +236,7 @@ export default class Cache {
         }).catch(reject);
       };
 
-      if (skipCache || !this.options.enabled || ARG_DISABLE) {
+      if (skipCache || !this.options.enabled) {
         return execPromise(null, true);
       }
 

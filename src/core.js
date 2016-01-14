@@ -27,8 +27,7 @@
 import Redis from 'ioredis';
 import {inherits} from 'util';
 import {EventEmitter} from 'events';
-import {after, mergeDeep, once, noop, isFunction, nodify, createLogger, requireModules} from './helpers';
-import Cache from './modules/cache';
+import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules} from './helpers';
 
 class RediBox {
 
@@ -292,7 +291,9 @@ class RediBox {
       }
 
       // read only instance, if available and if the script is set as a ready only script
-      if (this.client_read && !this.client_read.hasOwnProperty(key) && script.hasOwnProperty('readOnly') && script.readOnly === true) {
+      if (this.client_read && !this.client_read.hasOwnProperty(key) &&
+        script.hasOwnProperty('readOnly') &&
+        script.readOnly === true) {
         this.log.verbose(`Defining ready only command for lua script '${key}' from module '${module}'.`);
         this.client_read.defineCommand(key, {numberOfKeys: script.keys, lua: script.lua});
       }
