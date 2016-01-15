@@ -1,6 +1,11 @@
 const Benchmark = require('benchmark');
 const suite = new Benchmark.Suite();
 const Rbox = require('./../lib').default;
+const mergeDeep = require('./../lib/helpers').mergeDeep;
+
+// console.dir(mergeDeep);
+// console.dir(mergeDeep({a: 1}, { b : { c: { d: { e: 12345}}}}));
+// process.exit(0);
 
 /**
  * To benchmark with a local cluster,

@@ -2,8 +2,8 @@
   "presets": ["es2015-node4"],
   "env": {
     "production": {
-      "compact": true,
-      "comments": false
+      "compact": false,
+      "comments": true
     }
   },
   "plugins": [
