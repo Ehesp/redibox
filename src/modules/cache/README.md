@@ -125,3 +125,5 @@ Example:
   - `wrapExpress` - wrap express query / potentially provide middleware for this.
   - `wrapCallback` - though potentially this can be done in wrapPromise and then `nodify` it.
   - `set`, `clear` and `del` only accept callbacks at the moment, `nodify` with promises.
+
+![Evie](https://pbs.twimg.com/media/CYY44mYWMAATghb.jpg:large) @elliothesp
