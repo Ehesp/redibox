@@ -126,4 +126,6 @@ Example:
   - `wrapCallback` - though potentially this can be done in wrapPromise and then `nodify` it.
   - `set`, `clear` and `del` only accept callbacks at the moment, `nodify` with promises.
 
-![Evie](https://pbs.twimg.com/media/CYY44mYWMAATghb.jpg:large) @elliothesp
+"RUB MA BELLEH RIGHT MEOW" 
+![Evie](https://pbs.twimg.com/media/CYY44mYWMAATghb.jpg:large) 
+[@elliothesp](https://twitter.com/elliothesp) 
