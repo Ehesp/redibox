@@ -157,7 +157,7 @@ export default class Cache {
    */
   wrap = deprecate(function () {
     'use strict';
-    return this.wrapWaterline.apply(null, arguments);
+    return this.wrapWaterline.apply(this, arguments);
   }, 'Cache.wrap is deprecated, please use a specific wrap function, i.e wrapWaterline or wrapPromise');
 
   /**
