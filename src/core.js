@@ -49,6 +49,8 @@ class RediBox {
 
     this.options = {
       redis: {
+        publisher: false,
+        subscriber: false,
         cluster: false,
         clusterScaleReads: true,
         connectionTimeout: 6000,
@@ -79,14 +81,17 @@ class RediBox {
     }, this.options.redis.connectionTimeout);
 
     // all clients callback here to notify ready
-    const reportReady = after(1 + (this.options.redis.cluster && this.options.redis.clusterScaleReads), once(() => {
+    const reportReady = after(1 +
+      (this.options.redis.cluster && this.options.redis.clusterScaleReads) +
+      this.options.redis.publisher +
+      this.options.redis.subscriber, once(() => {
       clearTimeout(connectFailedTimeout);
       this.log.verbose('Redis clients all reported as \'ready\'.');
       const clients = {
         client: this.client.status,
         client_read: this.options.redis.cluster ? this.client_read.status : null
       };
-      this.loadModules(() => {
+      this._loadModules(() => {
         this.log.verbose('-----------------------');
         this.log.verbose(' RediBox is now ready! ');
         this.log.verbose('-----------------------\n');
@@ -96,58 +101,85 @@ class RediBox {
     }));
 
     // https://github.com/luin/ioredis#error-handling
-    Redis.Promise.onPossiblyUnhandledRejection(this.redisError);
+    Redis.Promise.onPossiblyUnhandledRejection(this._redisError);
 
     if (this.options.redis.cluster) {
       this.log.verbose('Starting in cluster mode...');
       // check we have at least one host in the config.
       if (!this.options.redis.hosts && this.options.redis.hosts.length) {
         const noClusterHostsError = new Error(
-          'No hosts found, when in cluster mode an array of hosts is required.'
+          'No hosts found! When in cluster mode an array of hosts is required.'
         );
         this.emit('error', noClusterHostsError);
         return callBackOnce(noClusterHostsError);
       }
-
-      // create cluster master writes client
-      this.log.verbose('Starting a redis read/write client...');
-      this.client = new Redis.Cluster(this.options.redis.hosts, this.options.redis);
-
-      if (this.options.redis.clusterScaleReads) {
-        // create a second connection to use for scaled reads across
-        // all cluster instances, masters & slaves.
-        // UNLIMITED POWAAAHHHHH >=] https://media.giphy.com/media/hokMyu1PAKfJK/giphy.gif
-        this.log.verbose('Starting a redis read only client...');
-        this.client_read = new Redis.Cluster(this.options.redis.hosts, {readOnly: true, ...this.options.redis});
-        this.client_read.readOnly = true;
-
-        // sub to ready event
-        this.client_read.once('ready', () => {
-          this.log.verbose('Redis read only client reported \'ready\' status.');
-          reportReady();
-        });
-      }
-    } else {
-      this.log.verbose('Starting a redis read/write client...');
-      this.client = new Redis(this.options.redis);
     }
-    // sub to ready event
-    this.client.once('ready', () => {
-      this.log.verbose('Redis read/write client reported \'ready\' status.');
-      reportReady();
-    });
+
+    // normal read/write client
+    this._createClient('client', reportReady);
+
+    // create a second connection to use for scaled reads across
+    // all cluster instances, masters & slaves.
+    // UNLIMITED POWAAAHHHHH >=] https://media.giphy.com/media/hokMyu1PAKfJK/giphy.gif
+    if (this.options.redis.cluster && this.options.redis.clusterScaleReads) {
+      this._createClient('client_read', true, reportReady);
+    }
+
+    // client solely for subscribing
+    if (this.options.redis.subscriber) {
+      this._createClient('subscriber', reportReady);
+    }
+
+    // client solely for publishing
+    if (this.options.redis.publisher) {
+      this._createClient('publisher', reportReady);
+    }
   }
 
   /**
    * Internal error Handler - just emits all redis errors.
+   * @private
    * @param {Error} error
    * @returns {null}
    */
-  redisError = (error) => {
+  _redisError = (error) => {
     this.emit('error', error);
   };
 
-  loadModules(completed) {
+	/**
+   * Creates a new redis client, connects and then onto the core class
+   * @private
+   * @param clientName client name, this is also the property name on
+   * @param readOnly
+   * @param reportReady
+   */
+  _createClient(clientName, readOnly = false, reportReady = noop) {
+    if (isFunction(readOnly)) {
+      reportReady = readOnly;
+      readOnly = false;
+    }
+    if (this.options.redis.cluster) {
+      this.log.verbose(`Creating a ${readOnly ? 'read only' : 'read/write'} redis CLUSTER client...`);
+      this[clientName] = new Redis.Cluster(this.options.redis.hosts, {readOnly: readOnly, ...this.options.redis});
+      this[clientName].readOnly = readOnly;
+    } else {
+      this.log.verbose(`Creating a ${readOnly ? 'read only' : 'read/write'} redis client...`);
+      this[clientName] = new Redis(this.options.redis);
+    }
+
+    this[clientName].once('ready', () => {
+      this.log.verbose(`${readOnly ? 'Read only' : 'Read/write'} redis client '${clientName}' is ready!`);
+      return reportReady();
+    });
+  }
+
+	/**
+   * Module bootstrap,
+   * @private
+   * @param completed
+   * @returns {*}
+   */
+  _loadModules(completed) {
     this.log.verbose('Begin mounting modules...');
     requireModules({
       moduleLoader: (name, Module) => {
@@ -174,6 +206,12 @@ class RediBox {
     if (this.client_read) {
       this.client.quit();
     }
+    if (this.subscriber) {
+      this.subscriber.quit();
+    }
+    if (this.publisher) {
+      this.publisher.quit();
+    }
   }
 
   /**
@@ -185,6 +223,27 @@ class RediBox {
     }
     if (this.client_read) {
       this.client.disconnect();
+    }
+    if (this.subscriber) {
+      this.subscriber.disconnect();
+    }
+    if (this.publisher) {
+      this.publisher.disconnect();
+    }
+  }
+
+  clusterCommander(command, args) {
+    const cluster = this.client;
+    var masterNodes = Object.keys(cluster.masterNodes);
+    if (masterNodes.length > 0) {
+      for (var key in cluster.masterNodes) {
+        // if (!cluster.hasOwnProperty(key)) continue;
+        var node = cluster.masterNodes[key];
+        console.error('FLUSHED ' + key);
+        node.flushall();
+      }
+    } else {
+      console.error('NO MASTER NODES');
     }
   }
 
