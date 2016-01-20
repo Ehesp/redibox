@@ -89,7 +89,7 @@ class RediBox {
       this.log.verbose('Redis clients all reported as \'ready\'.');
       const clients = {
         client: this.client.status,
-        client_read: this.options.redis.cluster ? this.client_read.status : null
+        client_read: this.options.redis.cluster && this.options.redis.clusterScaleReads ? this.client_read.status : null
       };
       this._loadModules(() => {
         this.log.verbose('-----------------------');
@@ -157,7 +157,7 @@ class RediBox {
    * @param readOnly
    * @param reportReady
    */
-  _createClient(clientName, readOnly = false, reportReady = noop) {
+  _createClient(clientName:string, readOnly = false, reportReady = noop) {
     if (isFunction(readOnly)) {
       reportReady = readOnly;
       readOnly = false;
@@ -183,7 +183,7 @@ class RediBox {
    * @param completed
    * @returns {*}
    */
-  _loadModules(completed) {
+  _loadModules(completed:Function) {
     this.log.verbose('Begin mounting modules...');
     requireModules({
       moduleLoader: (name, Module) => {
@@ -236,8 +236,6 @@ class RediBox {
     }
   }
 
-  // TODO - this can be done much nicer with a ES6 Proxy, when it becomes available
-  // TODO - i.e. RediBox.cluster.flushall() with a proxy sat at 'cluster'
   /**
    * Send a command to all cluster master nodes - i.e. FLUSHALL
    * @param command
@@ -266,12 +264,68 @@ class RediBox {
     }));
   }
 
-  clusterSlaves() {
-
+	/**
+   * Returns an array of all master and slave node addresses that
+   * we have a redis connection to
+   * @returns {Array}
+   */
+  clusterGetNodes() {
+    if (!this.options.redis.cluster) {
+      return [];
+    }
+    return Object.keys(this.client.nodes);
   }
 
-  clusterMasters() {
 
+  /**
+   * Returns an array of all the slave node addresses.
+   * @returns {Array}
+   */
+  clusterGetSlaves() {
+    if (!this.options.redis.cluster) {
+      return [];
+    }
+    const masters = this.clusterGetMasters();
+    return Object.keys(this.client.nodes).filter(function (node) {
+      return masters.indexOf(node) === -1;
+    });
+  }
+
+	/**
+   * Returns an array of all the master node addresses.
+   * @returns {Array}
+   */
+  clusterGetMasters() {
+    if (!this.options.redis.cluster) {
+      return [];
+    }
+    return Object.keys(this.client.masterNodes);
+  }
+
+	/**
+   * Returns the individual cluster node connection instance.
+   *  - Returns 'false' if not found.
+   * @param address
+   * @returns {*}
+   */
+  clusterGetNodeClient(address:string) {
+    if (!this.options.redis.cluster) {
+      return false;
+    }
+    if (this.client.nodes.hasOwnProperty(address)) {
+      return this.client.nodes[address];
+    }
+    return false;
+  }
+
+  /**
+   * Makes sure we can actually use the cluster read client, otherwise use the master.
+   *   - makes sure the read client is connected ok, if it's not then reverts to the
+   *     standard non read only client.
+   * @returns {boolean}
+   */
+  clusterCanScaleReads() {
+    return this.options.redis.cluster && this.options.redis.clusterScaleReads && this.connectionOK(true);
   }
 
   /**
@@ -279,7 +333,7 @@ class RediBox {
    * @returns {*}
    */
   getReadOnlyClient() {
-    if (this.canUseReadScaleClient()) {
+    if (this.clusterCanScaleReads()) {
       return this.client_read;
     }
     return this.client;
@@ -287,6 +341,7 @@ class RediBox {
 
   /**
    * Returns a client for read and write purposes.
+   * Just a fluff function, can directly get `this.client`.
    * @returns {*}
    */
   getClient() {
@@ -295,9 +350,9 @@ class RediBox {
 
 
   /**
-   * Checks if redis client connection is ready.
+   * Checks if a redis client connection is ready.
    * @returns {Boolean} Client status
-   * // TODO deprecate in favour of isClientConnected
+   * TODO deprecate in favour of isClientConnected
    */
   connectionOK(readClient) {
     if (readClient) {
@@ -307,20 +362,13 @@ class RediBox {
   }
 
   /**
-   * Checks if redis client connection is ready.
+   * Checks if a redis client connection is ready.
    * @returns {Boolean} Client status
    */
-  static isClientConnected(client) {
+  isClientConnected(client) {
     return client && client.status === 'ready';
   }
 
-  /**
-   * Makes sure we can actually use the read client, otherwise use the master
-   * @returns {boolean}
-   */
-  canUseReadScaleClient() {
-    return this.options.redis.cluster && this.options.redis.clusterScaleReads && this.connectionOK(true);
-  }
 
   /**
    * Defines a lua script as a command on both read and write clients if necessary
@@ -396,7 +444,7 @@ class RediBox {
       // most likely going to be non read only command
       const client = !readOnly ? _this.getClient() : _this.getReadOnlyClient();
 
-      if (!RediBox.isClientConnected(client)) {
+      if (!_this.isClientConnected(client)) {
         return new Promise(function (resolve, reject) {
           return reject('Redis not connected or ready.');
         });
