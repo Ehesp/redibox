@@ -77,10 +77,10 @@ class RediBox {
 
     // setup connection timeout
     const connectFailedTimeout = setTimeout(() => {
-      return callBackOnce(new Error('Cache failed to connect to redis, please check your config / servers.'));
+      return callBackOnce(new Error('Failed to connect to redis, please check your config / servers.'));
     }, this.options.redis.connectionTimeout);
 
-    // all clients callback here to notify ready
+    // all clients callback here to notify ready state
     const reportReady = after(1 +
       (this.options.redis.cluster && this.options.redis.clusterScaleReads) +
       this.options.redis.publisher +
@@ -96,7 +96,11 @@ class RediBox {
         this.log.verbose(' RediBox is now ready! ');
         this.log.verbose('-----------------------\n');
         this.emit('ready', clients);
-        return callBackOnce(null, clients);
+        // set immediate to allow ioredis to init cluster.
+        // without this cluster nodes are sometimes undefined for a few ms.
+        return setImmediate(function () {
+          callBackOnce(null, clients);
+        });
       });
     }));
 
@@ -146,7 +150,7 @@ class RediBox {
     this.emit('error', error);
   };
 
-	/**
+  /**
    * Creates a new redis client, connects and then onto the core class
    * @private
    * @param clientName client name, this is also the property name on
@@ -173,7 +177,7 @@ class RediBox {
     });
   }
 
-	/**
+  /**
    * Module bootstrap,
    * @private
    * @param completed
@@ -232,19 +236,42 @@ class RediBox {
     }
   }
 
-  clusterCommander(command, args) {
-    const cluster = this.client;
-    var masterNodes = Object.keys(cluster.masterNodes);
-    if (masterNodes.length > 0) {
-      for (var key in cluster.masterNodes) {
-        // if (!cluster.hasOwnProperty(key)) continue;
-        var node = cluster.masterNodes[key];
-        console.error('FLUSHED ' + key);
-        node.flushall();
-      }
-    } else {
-      console.error('NO MASTER NODES');
+  // TODO - this can be done much nicer with a ES6 Proxy, when it becomes available
+  // TODO - i.e. RediBox.cluster.flushall() with a proxy sat at 'cluster'
+  /**
+   * Send a command to all cluster master nodes - i.e. FLUSHALL
+   * @param command
+   * @param args
+   * @returns {Promise}
+   * @example
+   *   RediBox.clusterExec('flushall').then(function (result) {
+          console.dir(result);
+        }, function (error) {
+          console.dir(error);
+        });
+   */
+  clusterExec(command:string, args = []) {
+    if (!this.options.redis.cluster) {
+      return Promise.reject(new Error('Cannot clusterExec: Not a cluster connection!'));
     }
+
+    const nodes = Object.keys(this.client.masterNodes);
+
+    if (!nodes.length) {
+      return Promise.reject(new Error('Cannot clusterExec: No master nodes found!'));
+    }
+
+    return Promise.all(nodes.map(node => {
+      return this.client.masterNodes[node][command.toLowerCase()].apply(this.client.masterNodes[node], args);
+    }));
+  }
+
+  clusterSlaves() {
+
+  }
+
+  clusterMasters() {
+
   }
 
   /**
@@ -265,6 +292,7 @@ class RediBox {
   getClient() {
     return this.client;
   }
+
 
   /**
    * Checks if redis client connection is ready.
@@ -295,7 +323,7 @@ class RediBox {
   }
 
   /**
-   *
+   * Defines a lua script as a command on both read and write clients if necessary
    * @param name
    * @param lua
    * @param keys
@@ -359,6 +387,7 @@ class RediBox {
     });
   }
 
+  // todo - allows custom lua commands to be called from the core RediBox class
   customCommandWrapper = (command, readOnly) => {
     const _this = this;
     return function () {

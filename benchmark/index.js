@@ -3,9 +3,11 @@ const suite = new Benchmark.Suite();
 const Rbox = require('./../lib').default;
 const mergeDeep = require('./../lib/helpers').mergeDeep;
 
-// console.dir(mergeDeep);
-// console.dir(mergeDeep({a: 1}, { b : { c: { d: { e: 12345}}}}));
-// process.exit(0);
+// TODO
+// TODO
+// TODO      THIS BENCHMARK FILE IS MORE OF A TESTING
+// TODO            PLAYGROUND AT THE MOMENT
+// TODO
 
 /**
  * To benchmark with a local cluster,
@@ -51,6 +53,39 @@ const mergeDeep = require('./../lib/helpers').mergeDeep;
 
 // create new instance of RediBox
 const RediBox = new Rbox({
+  redis: {
+    publisher: true,
+    subscriber: true,
+    cluster: true,
+    clusterScaleReads: true,
+    connectionTimeout: 12000,
+    hosts: [
+      {
+        host: '127.0.0.1',
+        port: 30001
+      },
+      {
+        host: '127.0.0.1',
+        port: 30002
+      },
+      {
+        host: '127.0.0.1',
+        port: 30003
+      },
+      {
+        host: '127.0.0.1',
+        port: 30004
+      },
+      {
+        host: '127.0.0.1',
+        port: 30005
+      },
+      {
+        host: '127.0.0.1',
+        port: 30006
+      }
+    ]
+  },
   log: {
     level: 'verbose'
   }
@@ -63,14 +98,17 @@ RediBox.on('error', function (error) {
 RediBox.on('ready', function (status) {
   RediBox.log.info(`Client status is: ${status.client}`);
 
-  //console.dir(RediBox.throttle.seconds(60));
-  //console.dir(RediBox.throttle.months(12));
-
   if (status.client_read) {
-    RediBox.log.info(`Client status is: ${status.client}`);
+    RediBox.log.info(`Read Only: Client status is: ${status.client}`);
   }
 
-  RediBox.log.info(`Adding Benchmark 'RediBox Cache Get'`);
+  RediBox.clusterExec('flushall').then(function (result) {
+    console.dir(result);
+  }, function (error) {
+    console.dir(error);
+  });
+
+  //RediBox.log.info(`Adding Benchmark 'RediBox Cache Get'`);
   suite.add('RediBox Cache Get', {
     defer: true,
     fn: function (deferred) {
@@ -103,6 +141,6 @@ RediBox.on('ready', function (status) {
     process.exit();
   });
 
-  RediBox.log.info(`Starting Benchmarks: \n`);
-  suite.run({async: true});
+  //RediBox.log.info(`Starting Benchmarks: \n`);
+  //suite.run({async: true});
 });
