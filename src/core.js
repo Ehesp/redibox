@@ -131,7 +131,11 @@ class RediBox {
 
     // client solely for subscribing
     if (this.options.redis.subscriber) {
-      this._createClient('subscriber', reportReady);
+      this._createClient('subscriber', ()=> {
+        this.subscriber.on('message', this._onMessage);
+        this.subscriber.on('pmessage', this._onPatternMessage);
+        reportReady();
+      });
     }
 
     // client solely for publishing
@@ -200,6 +204,27 @@ class RediBox {
   }
 
   /**
+   * Internal pub/sub channel message listener
+   * @param channel
+   * @param message
+   * @private
+   */
+  _onMessage(channel, message) {
+
+  }
+
+  /**
+   * Internal pub/sub pattern message listener
+   * @param pattern
+   * @param channel
+   * @param message
+   * @private
+   */
+  _onPatternMessage(pattern, channel, message) {
+
+  }
+
+  /**
    * Force quit, will not wait for pending replies (use disconnect if you need to wait).
    * @returns null
    */
@@ -264,7 +289,7 @@ class RediBox {
     }));
   }
 
-	/**
+  /**
    * Returns an array of all master and slave node addresses that
    * we have a redis connection to
    * @returns {Array}
@@ -275,7 +300,6 @@ class RediBox {
     }
     return Object.keys(this.client.nodes);
   }
-
 
   /**
    * Returns an array of all the slave node addresses.
@@ -291,7 +315,7 @@ class RediBox {
     });
   }
 
-	/**
+  /**
    * Returns an array of all the master node addresses.
    * @returns {Array}
    */
@@ -302,7 +326,7 @@ class RediBox {
     return Object.keys(this.client.masterNodes);
   }
 
-	/**
+  /**
    * Returns the individual cluster node connection instance.
    *  - Returns 'false' if not found.
    * @param address
@@ -348,7 +372,6 @@ class RediBox {
     return this.client;
   }
 
-
   /**
    * Checks if a redis client connection is ready.
    * @returns {Boolean} Client status
@@ -368,7 +391,6 @@ class RediBox {
   isClientConnected(client) {
     return client && client.status === 'ready';
   }
-
 
   /**
    * Defines a lua script as a command on both read and write clients if necessary
