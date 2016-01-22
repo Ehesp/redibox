@@ -55,9 +55,6 @@ class RediBox {
     // keep a timestamp of when we started
     this.boot_timestamp = Date.now();
 
-    console.debug(this.id);
-    //debugger;
-
     this.options = {
       redis: {
         publisher: false,
@@ -203,7 +200,9 @@ class RediBox {
     requireModules({
       moduleLoader: (name, Module) => {
         this.log.verbose(`Mounting module '${name}'...`);
-        Object.assign(this, {[name]: new Module(this.options[name] || {}, this)});
+        const opts = this.options[name] || {};
+        if (opts.enabled)
+        Object.assign(this, {[name]: new Module(opts || {}, this)});
       },
       scriptLoader: (name, scripts) => {
         this.log.verbose(`Defining scripts for module '${name}'...`);
