@@ -57,7 +57,7 @@ const RediBox = new Rbox({
     publisher: true,
     subscriber: true,
     cluster: true,
-    clusterScaleReads: true,
+    clusterScaleReads: false,
     connectionTimeout: 12000,
     hosts: [
       {
@@ -102,13 +102,11 @@ RediBox.on('ready', function (status) {
     RediBox.log.info(`Read Only: Client status is: ${status.client}`);
   }
 
-  RediBox.clusterExec('flushall').then(function (result) {
-    console.dir(result);
-  }, function (error) {
-    console.dir(error);
+  suite.add('IPC Message ID generate', function () {
+    RediBox.ipc.generateMessageId();
   });
 
-  //RediBox.log.info(`Adding Benchmark 'RediBox Cache Get'`);
+  RediBox.log.info(`Adding Benchmark 'RediBox Cache Get'`);
   suite.add('RediBox Cache Get', {
     defer: true,
     fn: function (deferred) {
@@ -141,6 +139,6 @@ RediBox.on('ready', function (status) {
     process.exit();
   });
 
-  //RediBox.log.info(`Starting Benchmarks: \n`);
-  //suite.run({async: true});
+  RediBox.log.info(`Starting Benchmarks: \n`);
+  suite.run({async: true});
 });

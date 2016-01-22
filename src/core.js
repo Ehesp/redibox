@@ -27,7 +27,9 @@
 import Redis from 'ioredis';
 import {inherits} from 'util';
 import {EventEmitter} from 'events';
-import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules} from './helpers';
+import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules}  from './helpers';
+import {hostname} from 'os';
+
 
 class RediBox {
 
@@ -46,6 +48,15 @@ class RediBox {
       readyCallback = options;
       options = {};
     }
+
+    // unique name of this instance, useful for targetted pubsub
+    this.id = hostname() + '.' + (Date.now() + Math.random().toString(36));
+
+    // keep a timestamp of when we started
+    this.boot_timestamp = Date.now();
+
+    console.debug(this.id);
+    //debugger;
 
     this.options = {
       redis: {
@@ -390,6 +401,14 @@ class RediBox {
    */
   isClientConnected(client) {
     return client && client.status === 'ready';
+  }
+
+	/**
+   * Returns if cluster or not.
+   * @returns {boolean}
+   */
+  isCluster() {
+    return this.options.redis.cluster;
   }
 
   /**

@@ -26,6 +26,26 @@
 
 import { Logger, transports } from 'winston';
 import { readdirSync, statSync } from 'fs';
+import { createHash } from 'crypto';
+
+export function sha1sum(data) {
+  return createHash('sha1')
+    .update(JSON.stringify(data))
+    .digest('hex');
+}
+
+
+export function deepGet(obj, path) {
+  path.split('.').forEach(function (key) {
+    if (!obj || !hasOwnProperty.call(obj, key)) {
+      obj = undefined;
+      return;
+    }
+    obj = obj[key];
+  });
+  return obj;
+}
+
 
 /**
  * @description Quick implementation of lodash's 'after' function
@@ -155,7 +175,7 @@ export function requireModules(options) {
   const dirName = options.dirName || `${__dirname}/modules`;
   const moduleLoader = options.moduleLoader || noop;
   const scriptLoader = options.scriptLoader || noop;
-  readdirSync(dirName).forEach(function (file) {
+  readdirSync(dirName).sort().reverse().forEach(function (file) {
     const filePath = dirName + '/' + file;
     if (statSync(filePath).isDirectory() && !filePath.match(/lib\/modules\/.+\/.+\//)) {
       requireModules({
