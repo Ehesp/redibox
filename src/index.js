@@ -26,6 +26,7 @@
 
 export { default } from './core';
 export { default as Cache } from './modules/cache';
+export { default as Job } from './modules/job';
 export { default as Throttle } from './modules/throttle';
 export { default as TimeSeries} from './modules/timeseries';
 export { default as Lock, default as RedLock } from './modules/lock';

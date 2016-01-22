@@ -20,7 +20,7 @@ class Queue {
       stallInterval: 5000,
       prefix: 'rdb:job',
       isWorker: true,
-      getEvents: true,
+      getEvents: false,
       sendEvents: true,
       enableScheduler: true,
       removeOnSuccess: true,
@@ -30,8 +30,9 @@ class Queue {
     mergeDeep(this.options, options);
 
     if (this.options.getEvents) {
-      this.rdb.subscriber.subscribe(this.toKey('events'));
-      this.rdb.subscriber.on('message', this.onMessage.bind(this));
+      // todo
+      // this.rdb.subscriber.subscribe(this.toKey('events'));
+      // this.rdb.subscriber.on('message', this.onMessage.bind(this));
     }
 
     if (this.options.enableScheduler && !process.argv.join('').includes('hive-no-scheduler')) {
@@ -153,7 +154,7 @@ class Queue {
    * @param job
    * @returns {Promise}
    */
-  runJob(job:Job):Promise {
+  runJob(job:_Job):Promise {
     return new Promise((resolve, reject) => {
       const handler = (typeof this.handler === 'string' ?
           deepGet(global, this.handler) : this.handler) || deepGet(global, job.data.runs);
@@ -177,7 +178,6 @@ class Queue {
       };
 
       const handleError = err => {
-
         clearTimeout(preventStallingTimeout);
         // silently ignore any multiple calls
         if (handled) {
@@ -352,12 +352,12 @@ class Queue {
       });
     };
 
-    const restartProcessing = () => {
-      this.rdb.client.once('ready', jobTick);
-    };
-
-    this.rdb.client.once('error', restartProcessing);
-    this.rdb.client.once('close', restartProcessing);
+    // TODO move to job core module
+    // const restartProcessing = () => {
+    //   this.rdb.client.once('ready', jobTick);
+    // };
+    // this.rdb.client.once('error', restartProcessing);
+    // this.rdb.client.once('close', restartProcessing);
 
     this.checkStalledJobs(setImmediate.bind(null, jobTick));
   }

@@ -26,7 +26,6 @@
 
 import util from 'util';
 import {noop, sha1sum} from './../../helpers';
-import {EventEmitter} from 'events';
 
 class Job {
 
@@ -67,20 +66,25 @@ class Job {
   }
 
   save(cb = noop) {
+    this.queue.rdb.log.verbose(`Saving new job for ${this.queue.name}`);
+    debugger;
     this.queue.rdb.client.addjob(
       this.queue.toKey('jobs'),
       this.queue.toKey('waiting'),
       this.queue.toKey('id'),
       this.toData(),
       !!this.options.unique,
-      this.options.unique ? sha1sum(this.data) : '',
-      (err, jobId) => {
+      this.options.unique ? sha1sum(this.data) : '', (err, jobId) => {
+        debugger;
+        this.queue.rdb.log.verbose(`Saved job for ${this.queue.name}`);
         if (jobId === 0 && this.options.unique) {
-          return this.queue.rdb.publisher.publish(this.queue.toKey('events'), JSON.stringify({
-            id: this.id,
-            event: 'duplicate',
-            data: this.data
-          }), cb);
+          return cb();
+          // TODO
+          //return this.queue.rdb.publisher.publish(this.queue.toKey('events'), JSON.stringify({
+          //  id: this.id,
+          //  event: 'duplicate',
+          //  data: this.data
+          //}), cb);
         }
         if (err) return cb(err);
         this.id = jobId.toString();
@@ -91,16 +95,7 @@ class Job {
         return cb(null, this);
       }
     );
-
-    // TODO
-    const promiseWithNotify = new Promise((resolve, reject) => {
-      this.resolve = resolve;
-      this.reject = reject;
-    });
-
-    promiseWithNotify.notify = notify => this.notify = notify;
-
-    return promiseWithNotify;
+    return this;
   }
 
   retries(n) {
@@ -165,6 +160,5 @@ class Job {
 
 }
 
-util.inherits(Job, EventEmitter);
 export default Job;
 

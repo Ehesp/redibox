@@ -56,7 +56,7 @@ export default class Job {
     if (!this._queues[queue]) {
       throw new Error('Cannot find the queue specified.');
     }
-    this.queue.rdb.log.verbose(`Creating task ${queue}`);
+    this.rdb.log.verbose(`Creating task for ${queue}`);
     return this._queues[queue].createJob(data);
   }
 
