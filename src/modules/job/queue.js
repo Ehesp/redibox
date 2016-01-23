@@ -14,6 +14,8 @@ class Queue {
   constructor(options, rdb):Queue {
     this.rdb = rdb;
     this.name = options.name;
+    this.handler = options.handler || null;
+    this.started = false;
     this.paused = false;
     this.jobs = {};
     this.options = {
@@ -29,20 +31,23 @@ class Queue {
 
     mergeDeep(this.options, options);
 
-    if (this.options.getEvents) {
-      // todo
-      // this.rdb.subscriber.subscribe(this.toKey('events'));
-      // this.rdb.subscriber.on('message', this.onMessage.bind(this));
-    }
+    this.rdb.createClient('bclient', false, () => {
+      this.rdb.log.verbose(`Block client for queue '${this.name}' is ready. Starting queue processor.`);
+      this.process(this.options.concurrency);
+    }, this);
 
-    if (this.options.enableScheduler && !process.argv.join('').includes('hive-no-scheduler')) {
-      // todo
-      // attach an instance of the scheduler
-      // this.scheduler = new Scheduler(this.options.scheduler, this.rdb);
-    }
-    this.emit.bind(this, 'ready');
+    // if (this.options.getEvents) {
+    // todo
+    // this.rdb.subscriber.subscribe(this.toKey('events'));
+    // this.rdb.subscriber.on('message', this.onMessage.bind(this));
+    // }
+
+    // if (this.options.enableScheduler && !process.argv.join('').includes('hive-no-scheduler')) {
+    // todo
+    // attach an instance of the scheduler
+    // this.scheduler = new Scheduler(this.options.scheduler, this.rdb);
+    // }
   }
-
 
   onMessage() {
     // TODO
@@ -106,7 +111,7 @@ class Queue {
    * @param data
    * @returns {Job}
    */
-  createJob(data):Job {
+  createJob(data):_Job {
     return new _Job(this, null, data);
   }
 
@@ -126,11 +131,11 @@ class Queue {
         return process.nextTick(resolve.bind(null, this.jobs[jobId]));
       }
       // else gather from redis
-      Job.fromId(this, jobId)
-         .then(job => {
-           this.jobs[jobId] = job;
-           return resolve(job);
-         }).catch(reject);
+      _Job.fromId(this, jobId)
+          .then(job => {
+            this.jobs[jobId] = job;
+            return resolve(job);
+          }).catch(reject);
     });
   }
 
@@ -139,8 +144,9 @@ class Queue {
    * @returns {Promise}
    */
   getNextJob():Promise {
+    this.rdb.log.verbose(`Getting next job for queue '${this.name}'.`);
     return new Promise((resolve, reject)=> {
-      this.rdb.client.brpoplpush(
+      this.bclient.brpoplpush(
         this.toKey('waiting'),
         this.toKey('active'), 0, (err, jobId) => {
           if (err) return reject(err);
@@ -200,10 +206,9 @@ class Queue {
             this.rdb.log.error(error);
           });
         }
-        console.trace(err);
+        this.rdb.log.error(err);
         this.rdb.log.error('------------------------------------------------------');
         this.rdb.log.error('');
-
         this.finishJob(err, null, job).then(resolve).catch(reject);
       };
 
@@ -299,26 +304,25 @@ class Queue {
   }
 
   /**
-   *
+   * Start the queue.
    * @param concurrency
-   * @param handler
    */
-  process(concurrency, handler) {
+  process(concurrency = 1) {
     if (!this.options.isWorker) {
       return this.rdb.log.warn('Cannot start processing ( queue.process(); ) on a non-worker client.');
     }
 
-    if (typeof concurrency === 'function' || typeof concurrency === 'string') {
-      handler = concurrency;
-      concurrency = 1;
+    if (this.started) {
+      return this.rdb.log.warn(`Cannot start the queue processor for '${this.name}' - it's already running!`);
     }
 
-    this.handler = handler;
+    this.started = true;
     this.running = 0;
     this.queued = 1;
     this.concurrency = concurrency;
 
     const jobTick = () => {
+      this.rdb.log.verbose(`Queue '${this.name}' job tick start.`);
       if (this.paused) {
         this.queued = this.queued - 1;
         return;
@@ -347,17 +351,18 @@ class Queue {
           setImmediate(jobTick);
         });
       }).catch(error => {
+        this.rdb.log.error(error);
         this.emit('error', error);
         return setImmediate(jobTick);
       });
     };
 
-    // TODO move to job core module
-    // const restartProcessing = () => {
-    //   this.rdb.client.once('ready', jobTick);
-    // };
-    // this.rdb.client.once('error', restartProcessing);
-    // this.rdb.client.once('close', restartProcessing);
+    const restartProcessing = () => {
+      this.bclient.once('ready', jobTick);
+    };
+
+    this.bclient.once('error', restartProcessing);
+    this.bclient.once('close', restartProcessing);
 
     this.checkStalledJobs(setImmediate.bind(null, jobTick));
   }
@@ -369,15 +374,17 @@ class Queue {
    */
   checkStalledJobs(interval, cb) {
     cb = typeof interval === 'function' ? interval : cb || noop;
-    this.rdb.client.checkstalledjobs(this.toKey('stallTime'), this.toKey('stalling'), this.toKey('waiting'), this.toKey('active'),
-      Date.now(), this.options.stallInterval, (err) => {
-        /* istanbul ignore if */
+    this.rdb.client.checkstalledjobs(
+      this.toKey('stallTime'),
+      this.toKey('stalling'),
+      this.toKey('waiting'),
+      this.toKey('active'),
+      Date.now(),
+      this.options.stallInterval, (err) => {
         if (err) return cb(err);
-
         if (typeof interval === 'number') {
           setTimeout(this.checkStalledJobs.bind(this, interval, cb), interval);
         }
-
         return cb();
       }
     );

@@ -25,11 +25,11 @@
  */
 
 import Redis from 'ioredis';
+import { each } from 'async';
 import {inherits} from 'util';
 import {EventEmitter} from 'events';
 import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules}  from './helpers';
 import {hostname} from 'os';
-
 
 class RediBox {
 
@@ -49,7 +49,7 @@ class RediBox {
       options = {};
     }
 
-    // unique name of this instance, useful for targetted pubsub
+    // unique name of this instance, useful for targeted pubsub
     this.id = hostname() + '.' + (Date.now() + Math.random().toString(36));
 
     // keep a timestamp of when we started
@@ -128,27 +128,28 @@ class RediBox {
     }
 
     // normal read/write client
-    this._createClient('client', reportReady);
+    this.createClient('client', reportReady);
 
     // create a second connection to use for scaled reads across
     // all cluster instances, masters & slaves.
     // UNLIMITED POWAAAHHHHH >=] https://media.giphy.com/media/hokMyu1PAKfJK/giphy.gif
     if (this.options.redis.cluster && this.options.redis.clusterScaleReads) {
-      this._createClient('client_read', true, reportReady);
+      this.createClient('client_read', true, reportReady);
     }
 
     // client solely for subscribing
     if (this.options.redis.subscriber) {
-      this._createClient('subscriber', ()=> {
-        this.subscriber.on('message', this._onMessage);
-        this.subscriber.on('pmessage', this._onPatternMessage);
+      this.createClient('subscriber', ()=> {
+        this.subscriberMessageEvents = new EventEmitter();
+        this.subscriber.on('message', ::this._onMessage);
+        this.subscriber.on('pmessage', ::this._onPatternMessage);
         reportReady();
       });
     }
 
     // client solely for publishing
     if (this.options.redis.publisher) {
-      this._createClient('publisher', reportReady);
+      this.createClient('publisher', reportReady);
     }
   }
 
@@ -159,6 +160,7 @@ class RediBox {
    * @returns {null}
    */
   _redisError = (error) => {
+    this.log.error(error);
     this.emit('error', error);
   };
 
@@ -168,22 +170,23 @@ class RediBox {
    * @param clientName client name, this is also the property name on
    * @param readOnly
    * @param reportReady
+   * @param scope
    */
-  _createClient(clientName:string, readOnly = false, reportReady = noop) {
+  createClient(clientName:string, readOnly = false, reportReady = noop, scope = this) {
     if (isFunction(readOnly)) {
       reportReady = readOnly;
       readOnly = false;
     }
     if (this.options.redis.cluster) {
       this.log.verbose(`Creating a ${readOnly ? 'read only' : 'read/write'} redis CLUSTER client...`);
-      this[clientName] = new Redis.Cluster(this.options.redis.hosts, {readOnly: readOnly, ...this.options.redis});
-      this[clientName].readOnly = readOnly;
+      scope[clientName] = new Redis.Cluster(this.options.redis.hosts, {readOnly: readOnly, ...this.options.redis});
+      scope[clientName].readOnly = readOnly;
     } else {
       this.log.verbose(`Creating a ${readOnly ? 'read only' : 'read/write'} redis client...`);
-      this[clientName] = new Redis(this.options.redis);
+      scope[clientName] = new Redis(this.options.redis);
     }
 
-    this[clientName].once('ready', () => {
+    scope[clientName].once('ready', () => {
       this.log.verbose(`${readOnly ? 'Read only' : 'Read/write'} redis client '${clientName}' is ready!`);
       return reportReady();
     });
@@ -202,7 +205,7 @@ class RediBox {
         this.log.verbose(`Mounting module '${name}'...`);
         const opts = this.options[name] || {};
         if (opts.enabled)
-        Object.assign(this, {[name]: new Module(opts || {}, this)});
+          Object.assign(this, {[name]: new Module(opts || {}, this)});
       },
       scriptLoader: (name, scripts) => {
         this.log.verbose(`Defining scripts for module '${name}'...`);
@@ -220,7 +223,9 @@ class RediBox {
    * @private
    */
   _onMessage(channel, message) {
-
+    setImmediate(() => {
+      this.subscriberMessageEvents.emit(channel, message);
+    });
   }
 
   /**
@@ -231,7 +236,68 @@ class RediBox {
    * @private
    */
   _onPatternMessage(pattern, channel, message) {
+    setImmediate(() => {
+      this.subscriberMessageEvents.emit(channel, {message, channel, pattern});
+      if (pattern !== channel) {
+        this.subscriberMessageEvents.emit(pattern, {message, channel, pattern});
+      }
+    });
+  }
 
+	/**
+   * Subscribe to a channel / event and on receiving the first event
+   * unsubscribe.
+   * @param channel
+   * @param handler
+   * @param cb
+   */
+  subscribeOnce(channel, handler, cb) {
+    this.subscriber.subscribe(channel, (subscribeError, count) => {
+      if (subscribeError) return cb(subscribeError, count);
+      setImmediate(() => {
+        this.subscriberMessageEvents.once(channel, (obj) => {
+          this.subscriber.unsubscribe(channel, (unsubscribeError) => {
+            if (unsubscribeError) this._redisError(unsubscribeError);
+            return handler(obj);
+          });
+        });
+        return cb(subscribeError, count);
+      });
+    });
+  }
+
+	/**
+   * Subscribe to a redis channel(s)
+   * @param channels {string|Array}
+   * @param handler
+   * @param cb
+   */
+  subscribe(channels, handler, cb) {
+    const _channels = [].concat(channels);
+    this.subscriber.subscribe(..._channels, (subscribeError, count) => {
+      if (subscribeError) return cb(subscribeError, count);
+      each(_channels, (channel, subscribed) => {
+        this.subscriberMessageEvents.on(channel, handler);
+        return subscribed();
+      }, cb);
+    });
+  }
+
+	/**
+   *
+   * @param channels {string|Array}
+   * @param handler
+   * @param completed
+   */
+  unsubscribe(channels, handler, completed) {
+    const _channels = [].concat(channels);
+    this.subscriber.unsubscribe(..._channels, (err, count) => {
+      if (err) return completed(err, count);
+      each(_channels, (channel, subscribed) => {
+        this.subscriberMessageEvents.on(channel, handler);
+        return subscribed();
+      }, completed);
+    });
   }
 
   /**
@@ -402,7 +468,7 @@ class RediBox {
     return client && client.status === 'ready';
   }
 
-	/**
+  /**
    * Returns if cluster or not.
    * @returns {boolean}
    */

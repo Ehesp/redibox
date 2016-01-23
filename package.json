@@ -70,6 +70,7 @@
     "sinon": "^1.17.2"
   },
   "dependencies": {
+    "async": "^1.5.2",
     "ioredis": "^1.14.0",
     "winston": "^2.1.1"
   }

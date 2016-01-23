@@ -33,6 +33,7 @@ class Job {
     unique: false
   }) {
     this.queue = queue;
+    this.rdb = this.queue.rdb;
     this.id = jobId;
     this.duplicate = false;
     this.progress = 0;
@@ -66,31 +67,21 @@ class Job {
   }
 
   save(cb = noop) {
-    this.queue.rdb.log.verbose(`Saving new job for ${this.queue.name}`);
-    debugger;
-    this.queue.rdb.client.addjob(
+    this.rdb.log.verbose(`Saving new job for ${this.queue.name}`);
+    this.rdb.client.addjob(
       this.queue.toKey('jobs'),
       this.queue.toKey('waiting'),
       this.queue.toKey('id'),
       this.toData(),
       !!this.options.unique,
       this.options.unique ? sha1sum(this.data) : '', (err, jobId) => {
-        debugger;
-        this.queue.rdb.log.verbose(`Saved job for ${this.queue.name}`);
+        this.rdb.log.verbose(`Saved job for ${this.queue.name}`);
         if (jobId === 0 && this.options.unique) {
           return cb();
-          // TODO
-          //return this.queue.rdb.publisher.publish(this.queue.toKey('events'), JSON.stringify({
-          //  id: this.id,
-          //  event: 'duplicate',
-          //  data: this.data
-          //}), cb);
         }
         if (err) return cb(err);
         this.id = jobId.toString();
         this.status = 'saved';
-        // TODO
-        // this.queue.rdb.client.subscribe(this.queue.toKey(`jobstatus:${this.id}`));
         this.queue.jobs[jobId] = this;
         return cb(null, this);
       }
@@ -130,7 +121,7 @@ class Job {
       return process.nextTick(cb.bind(null, Error('Progress must be between 0 and 100')));
     }
     this.progress = Number(progress);
-    this.queue.rdb.publisher.publish(this.queue.toKey('events'), JSON.stringify({
+    this.rdb.publisher.publish(this.queue.toKey('events'), JSON.stringify({
       id: this.id,
       event: 'progress',
       data: progress
@@ -138,21 +129,21 @@ class Job {
   }
 
   remove(cb = noop) {
-    this.queue.rdb.client.removejob(
+    this.rdb.client.removejob(
       this.queue.toKey('succeeded'), this.queue.toKey('failed'), this.queue.toKey('waiting'),
       this.queue.toKey('active'), this.queue.toKey('stalling'), this.queue.toKey('jobs'),
       this.id, cb);
   }
 
   retry(cb = noop) {
-    this.queue.rdb.client.multi()
+    this.rdb.client.multi()
         .srem(this.queue.toKey('failed'), this.id)
         .lpush(this.queue.toKey('waiting'), this.id)
         .exec(cb);
   }
 
   isInSet(set, cb = noop) {
-    this.queue.rdb.client.sismember(this.queue.toKey(set), this.id, function (err, result) {
+    this.rdb.client.sismember(this.queue.toKey(set), this.id, function (err, result) {
       if (err) return cb(err);
       return cb(null, result === 1);
     });

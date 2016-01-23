@@ -63,7 +63,8 @@ export default class Job {
   queueCreate(queue) {
     this.rdb.log.verbose(`[${this.constructor.name}]: queue '${queue.name}' created!`);
     this._queues[queue.name] = new Queue({...queue, ...this.options}, this.rdb);
-    this._queues[queue.name].process(queue.concurrency);
+    this._queues[queue.name].rdb = this.rdb;
+    //this._queues[queue.name].process(queue.concurrency);
   }
 
 
