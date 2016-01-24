@@ -25,10 +25,10 @@
  */
 
 import Redis from 'ioredis';
-import { each } from 'async';
+import {each} from 'async';
 import {inherits} from 'util';
 import {EventEmitter} from 'events';
-import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules}  from './helpers';
+import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules} from './helpers';
 import {hostname} from 'os';
 
 class RediBox {
@@ -224,7 +224,7 @@ class RediBox {
    */
   _onMessage(channel, message) {
     setImmediate(() => {
-      this.subscriberMessageEvents.emit(channel, message);
+      this.subscriberMessageEvents.emit(channel, {message, channel, timestamp: Date.now()});
     });
   }
 
@@ -237,14 +237,14 @@ class RediBox {
    */
   _onPatternMessage(pattern, channel, message) {
     setImmediate(() => {
-      this.subscriberMessageEvents.emit(channel, {message, channel, pattern});
+      this.subscriberMessageEvents.emit(channel, {message, channel, pattern, timestamp: Date.now()});
       if (pattern !== channel) {
-        this.subscriberMessageEvents.emit(pattern, {message, channel, pattern});
+        this.subscriberMessageEvents.emit(pattern, {message, channel, pattern, timestamp: Date.now()});
       }
     });
   }
 
-	/**
+  /**
    * Subscribe to a channel / event and on receiving the first event
    * unsubscribe.
    * @param channel
@@ -256,6 +256,7 @@ class RediBox {
       if (subscribeError) return cb(subscribeError, count);
       setImmediate(() => {
         this.subscriberMessageEvents.once(channel, (obj) => {
+          // todo check listener count before unsub
           this.subscriber.unsubscribe(channel, (unsubscribeError) => {
             if (unsubscribeError) this._redisError(unsubscribeError);
             return handler(obj);
@@ -266,7 +267,7 @@ class RediBox {
     });
   }
 
-	/**
+  /**
    * Subscribe to a redis channel(s)
    * @param channels {string|Array}
    * @param handler
@@ -283,7 +284,7 @@ class RediBox {
     });
   }
 
-	/**
+  /**
    *
    * @param channels {string|Array}
    * @param handler
