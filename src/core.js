@@ -28,7 +28,7 @@ import Redis from 'ioredis';
 import {each} from 'async';
 import {inherits} from 'util';
 import {EventEmitter} from 'events';
-import {after, mergeDeep, once, noop, isFunction, createLogger, requireModules} from './helpers';
+import {after, mergeDeep, once, noop, isObject, isFunction, createLogger, requireModules} from './helpers';
 import {hostname} from 'os';
 
 class RediBox {
@@ -56,7 +56,9 @@ class RediBox {
     this.boot_timestamp = Date.now();
 
     this.options = {
+      logRedisErrors: false,
       redis: {
+        prefix: 'rdb',
         publisher: false,
         subscriber: false,
         cluster: false,
@@ -155,13 +157,16 @@ class RediBox {
 
   /**
    * Internal error Handler - just emits all redis errors.
+   * Also optionally logs them t console.
    * @private
    * @param {Error} error
    * @returns {null}
    */
   _redisError = (error) => {
-    this.log.error(error);
-    this.emit('error', error);
+    if (error) {
+      if (this.options.logRedisErrors) this.log.error(error);
+      this.emit('error', error);
+    }
   };
 
   /**
@@ -217,23 +222,18 @@ class RediBox {
   }
 
   /**
-   * Attempts to serialize a jon string into an object, else return
+   * Attempts to serialize a json string into an object, else return
    * the original value.
    * @param message
    * @returns {string}
    * @private
    */
   _serializeSubMessage(message:string) {
-    //console.dir(message);
-    // quick fire tests
-    if (message.includes('{') || message.includes('[')) {
-      try {
-        //return JSON.parse(message);
-      } catch (jsonError) {
-        return message;
-      }
+    try {
+      return JSON.parse(message);
+    } catch (jsonError) {
+      return message;
     }
-    return message;
   }
 
   /**
@@ -248,7 +248,7 @@ class RediBox {
         this.subscriberMessageEvents.emit(channel, {
           data: this._serializeSubMessage(message),
           channel,
-          timestamp: Date.now()
+          timestamp: Math.floor(Date.now() / 1000)
         });
       });
     }
@@ -282,57 +282,104 @@ class RediBox {
     });
   }
 
-  unsubsribeFromOnce(channel) {
+  /**
+   * Unsubscribe after a subOnce has completed.
+   * @param channel
+   * @private
+   */
+  _unsubscribeAfterOnce(channel) {
+    const channelWithPrefix = this.toKey(channel);
     setImmediate(()=> {
-      this.log.verbose(`Checking to see if we should unsub from channel '${channel}'.`);
-      this.getClient().pubsub('numsub', channel)
+      this.log.verbose(`Checking to see if we should unsub from channel '${channelWithPrefix}'.`);
+      this.getClient().pubsub('numsub', channelWithPrefix)
           .then((countSubs) => {
-            this.log.verbose(`Channel '${channel}' subscriber count is ${countSubs}.`);
-            if (countSubs === 1) {
-              this.log.verbose(`Unsubscribing from channel '${channel}'.`);
-              this.subscriber.unsubscribe(channel, (unsubscribeError) => {
-                if (unsubscribeError) return this._redisError(unsubscribeError);
-                this.log.verbose(`Unsubscribed successfully from channel '${channel}'.`);
-              });
+            this.log.verbose(`Channel '${channelWithPrefix}' subscriber count is ${countSubs[1]}.`);
+            if (countSubs[1] <= 1) {
+              this.log.verbose(`Unsubscribing from channel '${channelWithPrefix}'.`);
+              // need the original non-prefix name here as unsub already adds it.
+              this.unsubscribe(channel, null, this._redisError);
             }
           }).catch(this._redisError);
     });
   }
 
   /**
-   * Subscribe to a channel / event and on receiving the first event
-   * unsubscribe.
-   * @param channel
+   * Subscribe to single or multiple channels / events and on receiving the first event
+   * unsubscribe. Includes an optional timeout.
+   * @param channels {string|Array}
    * @param handler
-   * @param cb
+   * @param subscribed
+   * @param timeout tim in ms until
    */
-  subscribeOnce(channel, handler, cb) {
-    this.subscriber.subscribe(channel, (subscribeError, count) => {
-      if (subscribeError) return cb(subscribeError, count);
-      setImmediate(() => {
-        this.subscriberMessageEvents.once(channel, (obj) => {
-          return handler(obj) && this.unsubsribeFromOnce(channel);
-        });
-        return cb(subscribeError, count);
+  subscribeOnce(channels, handler, subscribed, timeout) {
+    const _channels = [].concat(channels); // no mapping here - need the original name
+    each(_channels, (channel, subscribeOnceDone) => {
+      let timedOut = false;
+      let timeOutTimer;
+      const channelWithPrefix = this.toKey(channel);
+
+      if (timeout) {
+        timedOut = false;
+        timeOutTimer = setTimeout(() => {
+          timedOut = true;
+          this.subscriberMessageEvents.removeListener(channelWithPrefix, handler);
+          this._unsubscribeAfterOnce(channel);
+          handler({
+            channel,
+            timeout: true,
+            timeoutPeriod: timeout,
+            message: null,
+            timestamp: Math.floor(Date.now() / 1000)
+          });
+        }, timeout);
+      }
+
+      this.subscriber.subscribe(channelWithPrefix, (subscribeError, count) => {
+        if (subscribeError) return subscribeOnceDone(subscribeError, count);
+        if (!timeout || !timedOut) {
+          this.log.verbose(`Subscribed once to ${channelWithPrefix}`);
+          this.subscriberMessageEvents.once(channelWithPrefix, (obj) => {
+            if (!timeout || !timedOut) {
+              clearTimeout(timeOutTimer);
+              this._unsubscribeAfterOnce(channel);
+              handler(obj);
+            }
+          });
+        }
+        subscribeOnceDone();
       });
-    });
+    }, subscribed);
   }
 
   /**
    * Subscribe to a redis channel(s)
    * @param channels {string|Array}
    * @param handler
-   * @param cb
+   * @param subscribed
    */
-  subscribe(channels, handler, cb) {
-    const _channels = [].concat(channels);
+  subscribe(channels, handler, subscribed = noop) {
+    const _channels = [].concat(channels).map(this.toKey);
     this.subscriber.subscribe(..._channels, (subscribeError, count) => {
-      if (subscribeError) return cb(subscribeError, count);
-      each(_channels, (channel, subscribed) => {
+      if (subscribeError) return subscribed(subscribeError, count);
+      each(_channels, (channel, subscribeDone) => {
         this.subscriberMessageEvents.on(channel, handler);
-        return subscribed();
-      }, cb);
+        return subscribeDone();
+      }, subscribed);
     });
+  }
+
+  /**
+   * Publish a message to all channels specified
+   * @param channels {string|Array}
+   * @param message
+   * @param published
+   */
+  publish(channels, message, published = noop) {
+    const _channels = [].concat(channels).map(this.toKey);
+    const messageStringified = isObject(message) || Array.isArray(message) ? JSON.stringify(message) : message;
+    each(_channels, (channel, publishedToChannel) => {
+      this.publisher.publish(channel, messageStringified, publishedToChannel);
+    }, published);
   }
 
   /**
@@ -341,13 +388,17 @@ class RediBox {
    * @param handler
    * @param completed
    */
-  unsubscribe(channels, handler, completed) {
-    const _channels = [].concat(channels);
+  unsubscribe(channels, handler, completed = noop) {
+    const _channels = [].concat(channels).map(this.toKey);
     this.subscriber.unsubscribe(..._channels, (err, count) => {
       if (err) return completed(err, count);
-      each(_channels, (channel, subscribed) => {
-        this.subscriberMessageEvents.on(channel, handler);
-        return subscribed();
+      this.log.verbose(`Unsubscribed from ${_channels.toString()}`);
+      if (!handler) return completed(err);
+      each(_channels, (channel, unsubscribed) => {
+        if (this.subscriberMessageEvents.listenerCount(channel) !== 0) {
+          this.subscriberMessageEvents.on(channel, handler);
+        }
+        return unsubscribed();
       }, completed);
     });
   }
@@ -615,6 +666,15 @@ class RediBox {
       }
       return client[command].apply(null, arguments);
     };
+  };
+
+  /**
+   * Appends the prefix onto the specified key name / pubsub channel name
+   * @param key
+   * @returns {string}
+   */
+  toKey = (key) => {
+    return `${this.options.redis.prefix}:${key}`;
   };
 
 }
