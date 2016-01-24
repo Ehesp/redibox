@@ -24,7 +24,6 @@
  *
  */
 
-import util from 'util';
 import {noop, sha1sum} from './../../helpers';
 
 class Job {
@@ -77,6 +76,7 @@ class Job {
       this.options.unique ? sha1sum(this.data) : '', (err, jobId) => {
         this.rdb.log.verbose(`Saved job for ${this.queue.name}`);
         if (jobId === 0 && this.options.unique) {
+          this.duplicate = true;
           return cb();
         }
         if (err) return cb(err);

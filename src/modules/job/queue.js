@@ -36,41 +36,11 @@ class Queue {
       this.process(this.options.concurrency);
     }, this);
 
-    // if (this.options.getEvents) {
-    // todo
-    // this.rdb.subscriber.subscribe(this.toKey('events'));
-    // this.rdb.subscriber.on('message', this.onMessage.bind(this));
-    // }
-
-    // if (this.options.enableScheduler && !process.argv.join('').includes('hive-no-scheduler')) {
-    // todo
-    // attach an instance of the scheduler
+    // if (this.options.enableScheduler) {
+    // // todo
+    // // attach an instance of the scheduler
     // this.scheduler = new Scheduler(this.options.scheduler, this.rdb);
     // }
-  }
-
-  onMessage() {
-    // TODO
-    //message = JSON.parse(message);
-    //if (message.event === 'failed' || message.event === 'retrying') {
-    //  message.data = Error(message.data);
-    //}
-    //
-    //this.emit('job ' + message.event, message.id, message.data);
-    //
-    //if (this.jobs[message.id]) {
-    //  if (message.event === 'progress') {
-    //    this.jobs[message.id].progress = message.data;
-    //  } else if (message.event === 'retrying') {
-    //    this.jobs[message.id].options.retries = this.jobs[message.id].options.retries - 1;
-    //  }
-    //
-    //  this.jobs[message.id].emit(message.event, message.data);
-    //
-    //  if (message.event === 'succeeded' || message.event === 'failed') {
-    //    delete this.jobs[message.id];
-    //  }
-    //}
   }
 
   /**
