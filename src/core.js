@@ -217,15 +217,41 @@ class RediBox {
   }
 
   /**
+   * Attempts to serialize a jon string into an object, else return
+   * the original value.
+   * @param message
+   * @returns {string}
+   * @private
+   */
+  _serializeSubMessage(message:string) {
+    //console.dir(message);
+    // quick fire tests
+    if (message.includes('{') || message.includes('[')) {
+      try {
+        //return JSON.parse(message);
+      } catch (jsonError) {
+        return message;
+      }
+    }
+    return message;
+  }
+
+  /**
    * Internal pub/sub channel message listener
    * @param channel
    * @param message
    * @private
    */
   _onMessage(channel, message) {
-    setImmediate(() => {
-      this.subscriberMessageEvents.emit(channel, {message, channel, timestamp: Date.now()});
-    });
+    if (this.subscriberMessageEvents.listenerCount(channel) > 0) {
+      setImmediate(() => {
+        this.subscriberMessageEvents.emit(channel, {
+          data: this._serializeSubMessage(message),
+          channel,
+          timestamp: Date.now()
+        });
+      });
+    }
   }
 
   /**
@@ -237,10 +263,39 @@ class RediBox {
    */
   _onPatternMessage(pattern, channel, message) {
     setImmediate(() => {
-      this.subscriberMessageEvents.emit(channel, {message, channel, pattern, timestamp: Date.now()});
-      if (pattern !== channel) {
-        this.subscriberMessageEvents.emit(pattern, {message, channel, pattern, timestamp: Date.now()});
+      if (this.subscriberMessageEvents.listenerCount(channel) > 0) {
+        this.subscriberMessageEvents.emit(channel, {
+          data: this._serializeSubMessage(message),
+          channel,
+          pattern,
+          timestamp: Math.floor(Date.now() / 1000)
+        });
       }
+      if (pattern !== channel && this.subscriberMessageEvents.listenerCount(pattern) > 0) {
+        this.subscriberMessageEvents.emit(pattern, {
+          data: this._serializeSubMessage(message),
+          channel,
+          pattern,
+          timestamp: Math.floor(Date.now() / 1000)
+        });
+      }
+    });
+  }
+
+  unsubsribeFromOnce(channel) {
+    setImmediate(()=> {
+      this.log.verbose(`Checking to see if we should unsub from channel '${channel}'.`);
+      this.getClient().pubsub('numsub', channel)
+          .then((countSubs) => {
+            this.log.verbose(`Channel '${channel}' subscriber count is ${countSubs}.`);
+            if (countSubs === 1) {
+              this.log.verbose(`Unsubscribing from channel '${channel}'.`);
+              this.subscriber.unsubscribe(channel, (unsubscribeError) => {
+                if (unsubscribeError) return this._redisError(unsubscribeError);
+                this.log.verbose(`Unsubscribed successfully from channel '${channel}'.`);
+              });
+            }
+          }).catch(this._redisError);
     });
   }
 
@@ -256,11 +311,7 @@ class RediBox {
       if (subscribeError) return cb(subscribeError, count);
       setImmediate(() => {
         this.subscriberMessageEvents.once(channel, (obj) => {
-          // todo check listener count before unsub
-          this.subscriber.unsubscribe(channel, (unsubscribeError) => {
-            if (unsubscribeError) this._redisError(unsubscribeError);
-            return handler(obj);
-          });
+          return handler(obj) && this.unsubsribeFromOnce(channel);
         });
         return cb(subscribeError, count);
       });
