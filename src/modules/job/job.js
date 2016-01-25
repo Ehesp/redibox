@@ -97,6 +97,7 @@ class Job {
     return this;
   }
 
+  // TODO
   onComplete(completionCb) {
     this.completionCb = completionCb;
   }
@@ -114,6 +115,7 @@ class Job {
     return this;
   }
 
+  // todo pub sub events to track progress
   reportProgress(progress, cb = noop) {
     // right now we just send the pubsub event
     // might consider also updating the job hash for persistence
