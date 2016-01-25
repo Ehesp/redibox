@@ -247,7 +247,7 @@ class RediBox {
       setImmediate(() => {
         this.subscriberMessageEvents.emit(channel, {
           data: this._serializeSubMessage(message),
-          channel,
+          channel: this.remKeyPrefix(channel),
           timestamp: Math.floor(Date.now() / 1000)
         });
       });
@@ -266,7 +266,7 @@ class RediBox {
       if (this.subscriberMessageEvents.listenerCount(channel) > 0) {
         this.subscriberMessageEvents.emit(channel, {
           data: this._serializeSubMessage(message),
-          channel,
+          channel: this.remKeyPrefix(channel),
           pattern,
           timestamp: Math.floor(Date.now() / 1000)
         });
@@ -274,7 +274,7 @@ class RediBox {
       if (pattern !== channel && this.subscriberMessageEvents.listenerCount(pattern) > 0) {
         this.subscriberMessageEvents.emit(pattern, {
           data: this._serializeSubMessage(message),
-          channel,
+          channel: this.remKeyPrefix(channel),
           pattern,
           timestamp: Math.floor(Date.now() / 1000)
         });
@@ -307,11 +307,11 @@ class RediBox {
    * Subscribe to single or multiple channels / events and on receiving the first event
    * unsubscribe. Includes an optional timeout.
    * @param channels {string|Array}
-   * @param handler
+   * @param listener
    * @param subscribed
    * @param timeout tim in ms until
    */
-  subscribeOnce(channels, handler, subscribed, timeout) {
+  subscribeOnce(channels, listener, subscribed, timeout) {
     const _channels = [].concat(channels); // no mapping here - need the original name
     each(_channels, (channel, subscribeOnceDone) => {
       let timedOut = false;
@@ -322,9 +322,9 @@ class RediBox {
         timedOut = false;
         timeOutTimer = setTimeout(() => {
           timedOut = true;
-          this.subscriberMessageEvents.removeListener(channelWithPrefix, handler);
+          this.subscriberMessageEvents.removeListener(channelWithPrefix, listener);
           this._unsubscribeAfterOnce(channel);
-          handler({
+          listener({
             channel,
             timeout: true,
             timeoutPeriod: timeout,
@@ -342,7 +342,7 @@ class RediBox {
             if (!timeout || !timedOut) {
               clearTimeout(timeOutTimer);
               this._unsubscribeAfterOnce(channel);
-              handler(obj);
+              listener(obj);
             }
           });
         }
@@ -354,15 +354,15 @@ class RediBox {
   /**
    * Subscribe to a redis channel(s)
    * @param channels {string|Array}
-   * @param handler
+   * @param listener
    * @param subscribed
    */
-  subscribe(channels, handler, subscribed = noop) {
+  subscribe(channels, listener, subscribed = noop) {
     const _channels = [].concat(channels).map(this.toKey);
     this.subscriber.subscribe(..._channels, (subscribeError, count) => {
       if (subscribeError) return subscribed(subscribeError, count);
       each(_channels, (channel, subscribeDone) => {
-        this.subscriberMessageEvents.on(channel, handler);
+        this.subscriberMessageEvents.on(channel, listener);
         return subscribeDone();
       }, subscribed);
     });
@@ -385,21 +385,23 @@ class RediBox {
   /**
    *
    * @param channels {string|Array}
-   * @param handler
+   * @param listener
    * @param completed
    */
-  unsubscribe(channels, handler, completed = noop) {
+  unsubscribe(channels, listener, completed = noop) {
     const _channels = [].concat(channels).map(this.toKey);
+
+    if (listener) {
+      each(_channels, (channel, unsubscribed) => {
+        this.subscriberMessageEvents.removeListener(channel, listener);
+        return unsubscribed();
+      }, noop);
+    }
+
     this.subscriber.unsubscribe(..._channels, (err, count) => {
       if (err) return completed(err, count);
       this.log.verbose(`Unsubscribed from ${_channels.toString()}`);
-      if (!handler) return completed(err);
-      each(_channels, (channel, unsubscribed) => {
-        if (this.subscriberMessageEvents.listenerCount(channel) !== 0) {
-          this.subscriberMessageEvents.on(channel, handler);
-        }
-        return unsubscribed();
-      }, completed);
+      return completed();
     });
   }
 
@@ -669,12 +671,21 @@ class RediBox {
   };
 
   /**
-   * Appends the prefix onto the specified key name / pubsub channel name
+   * Appends the name spacing prefix onto the specified key name / pubsub channel name
    * @param key
    * @returns {string}
    */
   toKey = (key) => {
     return `${this.options.redis.prefix}:${key}`;
+  };
+
+  /**
+   * Removes the internal name spacing key prefix
+   * @param key
+   * @returns {string}
+   */
+  remKeyPrefix = (key) => {
+    return key.slice(this.options.redis.prefix.length + 1, key.length);
   };
 
 }
