@@ -18,7 +18,9 @@ and error handling.
 
 **Currently available features:**
  - **[Caching](/src/modules/cache/README.md)**, including easy wrapper helpers, e.g `wrapPromise`, `wrapWaterlineQuery` (for sails), `wrapExpressRequest`
+ - Queues and jobs. Lightweight poll free design. 
  - **Redis Clusters** with optional cluster scaled slave reads.
+ - Advanced Redis PUBSUB such as `subscribeOnce` with a timeout.
  - Custom **LUA Command** bootstrapping.
 
 To see docs for each of the individual features see the [use cases](#use-cases-and-modules) section.
@@ -56,7 +58,7 @@ RediBox.on('error' function(error) {
 
 ## RediBox Core
 
-Provides the core set of utilities used by all modules and can also be used in your own code.
+Provides the core set of utilities used by all modules and can also be used in your own code, things such as creating a pre-configured error handled client and advanced PUBSUB.
 
 For example, you can easily get a connected client to run your own redis commands:
 
@@ -94,6 +96,142 @@ Returns a read/write redis client.
 
 #### static RediBox.isClientConnected(client);
 Returns the connection state of the redis client provided.
+
+## RediBox Core PUBSUB
+
+RediBox core PUBSUB is more than just the standard ioredis/node_redis clients single 'message' event handler. It's setup to allow subscribing just like you would with a node event emitter. Internally though, RediBox has a on 'message' handler that routes pubsub messages to an event emitter which you're listening to when you subscribe, this gives you better control over channel flow. 
+
+### Methods
+
+
+#### RediBox.subscribeOnce(channels: string|Array, listener, subscribedCallback, [Optional] timeout);
+
+Subscribe once to single or multiple redis channels, i.e the same as node's EventEmitter.once(). On receiving the first event the client will automatically unsub (if no other subscribers) and remove your listener from the emitter. Cool huh? 'But wait, there is more!' - Not only can you subscribe for one event only, you can do so with a timeout also, i.e. I want one event from this channel within **5000 ms**, else let me know it timed out.
+
+This accepts a single channel as a string or multiple channels as an Array.
+
+Here's an advanced example with multiple channels and  timeout:
+```javascript
+  RediBox.subscribeOnce([
+    'requestID-123456:request:dataPart1',
+    'requestID-123456:request:dataPart2',
+    'requestID-123456:request:dataPart3'
+  ], function (message) { // on message received listener
+    if (message.timeout) {
+      return console.error(new Error(`Sub once to channel ${message.channel} timed out! =( `));
+    }
+    console.log('I received a message \\o/:');
+    console.dir(message.channel); // channel name
+    console.dir(message.timestamp); // when the message wa received
+    console.dir(message.data); // JSON parsed data
+  }, function (err) { // on subscribed callback
+    if (!err) {
+      console.log('Subscribed once to multiple channels!');
+
+      // test publish to just one channel, the rest will timeout
+      // this is normally sent from somewhere else
+      RediBox.publish('requestID-123456:request:dataPart1', {
+        someArray: [1, 2, 3, 4, 5],
+        somethingElse: 'foobar'
+      });
+    }
+  }, 3000); // I want an event back within 3 seconds for each channel ( so each has 3 secs to respond )
+  
+  /**
+  CONSOLE OUTPUT: 
+  
+  Subscribed once to multiple channels!
+  I received a message \o/:
+  'requestID-123456:request:dataPart1'
+  1453677089
+  { someArray: [ 1, 2, 3, 4, 5 ], somethingElse: 'foobar' }
+  [Error: Sub once to channel requestID-123456:request:dataPart2 timed out! =( ]
+  [Error: Sub once to channel requestID-123456:request:dataPart3 timed out! =( ]
+  
+  */
+  
+```
+
+
+
+#### RediBox.subscribe(channels: string|Array, listener, subscribedCallback);
+
+Equivalent to node's EventEmiiter.on() with an optional **subscribedCallback** to let you know when subscribed. This accepts a single channel as a string or multiple channels as an Array.
+
+Example: 
+```javascript
+  RediBox.subscribe('getMeSomeDataMrWorkerServer', function (message) { // your listener
+    console.log('I received a message \\o/:');
+    console.dir(message.channel); // channel name
+    console.dir(message.timestamp); // when the message wa received
+    console.dir(message.data); // JSON parsed data
+  }, function (err) { // subscribed callback
+    if (!err) {
+      // test publish to this channel
+      // this is normally sent from somewhere else
+      RediBox.publish('getMeSomeDataMrWorkerServer', {
+        someData: [1, 2, 3, 4, 5],
+        worker: 'serverXYZ'
+      });
+    }
+  });
+  
+  /**
+  CONSOLE OUTPUT: 
+  
+  I received a message \o/:
+  'getMeSomeDataMrWorkerServer'
+  1453678851
+  { someData: [ 1, 2, 3, 4, 5 ], worker: 'serverXYZ' }
+  
+  */
+```
+
+
+
+#### RediBox.unsubscribe(channels: string|Array, [Optional] listener, [Optional] unsubscribedCallback);
+
+Unsubscribe from single or multiple channels. Note that even though listener is optional, you should pass the original listener function that you provided when you subscribed to those channels - if available (see example below).
+
+```javascript
+  // your on message received listener
+  const myListener = function (message) {
+    console.log(message.data); // HELLO but not GOODBYE gets logged
+  };
+
+  RediBox.subscribe('getMeSomeDataMrWorkerServer', myListener, function (err) {
+    if (!err) {
+      RediBox.publish('getMeSomeDataMrWorkerServer', 'HELLO');
+      // some time later on:
+      setTimeout(function () {
+        RediBox.unsubscribe('getMeSomeDataMrWorkerServer', myListener);
+        RediBox.publish('getMeSomeDataMrWorkerServer', 'GOODBYE');
+      }, 2000);
+    }
+  });
+  
+  /**
+  CONSOLE OUTPUT:
+  
+    HELLO
+  */
+
+```
+
+
+
+
+#### RediBox.publish(channels: string|Array, message, [Optional] publishedCallback);
+
+Publishes a message to single or multiple channels. Non string values automatically get JSON stringified.
+
+```javascript
+  RediBox.publish('someChannel', 'HELLO');
+  // or with objects: 
+  RediBox.publish('someChannel', {
+    foo: 'bar'
+  });
+```
 
 ## Use Cases and Modules
 
