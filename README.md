@@ -18,10 +18,10 @@ and error handling.
 
 **Currently available features:**
  - **[Caching](/src/modules/cache/README.md)**, including easy wrapper helpers, e.g `wrapPromise`, `wrapWaterlineQuery` (for sails), `wrapExpressRequest`
- - Queues and jobs. Lightweight poll free design. 
+ - **Queues** and **jobs**. Lightweight polling free design with variable concurrency per queue.
  - **Redis Clusters** with optional cluster scaled slave reads.
- - Advanced Redis PUBSUB such as `subscribeOnce` with a timeout.
- - Custom **LUA Command** bootstrapping.
+ - **Advanced** Redis **PUBSUB** such as `subscribeOnce` with a timeout.
+ - Custom **LUA Commands** bootstrapping.
 
 To see docs for each of the individual features see the [use cases](#use-cases-and-modules) section.
 
