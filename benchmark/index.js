@@ -86,7 +86,7 @@ RediBox.on('ready', function (status) {
   };
 
   // create a test job
-  RediBox.job.create('test', {
+  RediBox.job.create('test', { // queue name to send the job to
     // the global function name that can handle this job,
     // can even be dot notated e.g. test.obj.something.runner
     // running via globals is optional, the other way is to
