@@ -31,7 +31,7 @@ import {EventEmitter} from 'events';
 import {after, mergeDeep, once, noop, isObject, isFunction, createLogger, requireModules} from './helpers';
 import {hostname} from 'os';
 
-class RediBox {
+class RediBox { // inherits EventEmitter doesn't quite work yet =/
 
   /**
    * Redis Caching Service
@@ -40,16 +40,13 @@ class RediBox {
    * @returns {RediBox} Returns new instance of RediBox
    */
   constructor(options, readyCallback = noop) {
-    if (!this instanceof RediBox) {
-      return new RediBox(options, readyCallback);
-    }
-
     if (isFunction(options)) {
       readyCallback = options;
       options = {};
     }
 
-    // unique name of this instance, useful for targeted pubsub
+    // unique name of this instance, useful for targeted pubsub / ipc for modules
+    // to communicate to other instances - i.e. pause a queue on all instances.
     this.id = hostname() + '.' + (Date.now() + Math.random().toString(36));
 
     // keep a timestamp of when we started
@@ -59,8 +56,8 @@ class RediBox {
       logRedisErrors: false,
       redis: {
         prefix: 'rdb',
-        publisher: false,
-        subscriber: false,
+        publisher: true,
+        subscriber: true,
         cluster: false,
         clusterScaleReads: true,
         connectionTimeout: 6000,
@@ -107,7 +104,7 @@ class RediBox {
         this.log.verbose('-----------------------\n');
         this.emit('ready', clients);
         // set immediate to allow ioredis to init cluster.
-        // without this cluster nodes are sometimes undefined for a few ms.
+        // without this cluster nodes are sometimes undefined
         return setImmediate(function () {
           callBackOnce(null, clients);
         });
@@ -328,7 +325,7 @@ class RediBox {
             channel,
             timeout: true,
             timeoutPeriod: timeout,
-            message: null,
+            data: null,
             timestamp: Math.floor(Date.now() / 1000)
           });
         }, timeout);
@@ -349,6 +346,39 @@ class RediBox {
         subscribeOnceDone();
       });
     }, subscribed);
+  }
+
+  /**
+   * Subscribe to all of the channels provided and as soon as the first
+   * message is received from any channel then unsubscribe from all.
+   * @param channels
+   * @param listener
+   * @param subscribed
+   * @param timeout
+   */
+  subscribeOnceOf(channels, listener, subscribed, timeout) {
+    let timeOutTimer = null;
+    // create an internal listener to wrap around the provided listener
+    // this will unsubscribe on the first event
+    const _listener = once((message) => {
+      if (timeOutTimer) clearTimeout(timeOutTimer);
+      this.unsubscribe(channels, _listener, function () {
+        listener(message);
+      });
+    });
+
+    this.subscribe(channels, _listener, subscribed);
+
+    if (timeout) {
+      timeOutTimer = setTimeout(() => {
+        _listener({
+          timeout: true,
+          timeoutPeriod: timeout,
+          message: null,
+          timestamp: Math.floor(Date.now() / 1000)
+        });
+      }, timeout + 50);
+    }
   }
 
   /**
