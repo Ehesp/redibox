@@ -1,7 +1,7 @@
 import util from 'util';
 import _Job from './job';
 import {EventEmitter} from 'events';
-import {noop, deepGet, mergeDeep} from './../../helpers';
+import {noop, deepGet, mergeDeep, isObject} from './../../helpers';
 
 class Queue {
 
@@ -113,7 +113,7 @@ class Queue {
    *
    * @returns {Promise}
    */
-  getNextJob():Promise {
+  _getNextJob():Promise {
     this.rdb.log.verbose(`Getting next job for queue '${this.name}'.`);
     return new Promise((resolve, reject)=> {
       this.bclient.brpoplpush(
@@ -130,27 +130,35 @@ class Queue {
    * @param job
    * @returns {Promise}
    */
-  runJob(job:_Job):Promise {
+  _runJob(job:_Job):Promise {
     return new Promise((resolve, reject) => {
+      const runs = job.data && job.data.runs && Array.isArray(job.data.runs) ? job.data.runs[0] : job.data.runs;
       const handler = (typeof this.handler === 'string' ?
-          deepGet(global, this.handler) : this.handler) || deepGet(global, job.data.runs);
+          deepGet(global, this.handler) : this.handler) || deepGet(global, runs);
 
       let preventStallingTimeout;
       let handled = false;
 
       const handleOK = data => {
+
         // silently ignore any multiple calls
         if (handled) {
           return;
         }
 
+        clearTimeout(preventStallingTimeout);
+
         handled = true;
 
         // set the data back to internal data
-        job.data = job._internalData;
-
-        clearTimeout(preventStallingTimeout);
-        this.finishJob(null, data, job).then(resolve).catch(reject);
+        if (job._internalData) {
+          job.data = job._internalData;
+        }
+        if (job.data.runs && Array.isArray(job.data.runs)) {
+          this._finishMultiJob(null, data, job).then(resolve).catch(reject);
+        } else {
+          this._finishSingleJob(null, data, job).then(resolve).catch(reject);
+        }
       };
 
       const handleError = err => {
@@ -167,19 +175,26 @@ class Queue {
           job.data = job._internalData;
         }
 
-        this.rdb.log.error('');
-        this.rdb.log.error('--------------- RDB JOB ERROR/FAILURE ---------------');
-        this.rdb.log.error('Job: ' + job.data.runs || this.name);
-        if (err.stack) {
-          const errors = err.stack.split('\n');
-          errors.forEach(error => {
-            this.rdb.log.error(error);
-          });
+        // only log the error if no notifyFailure pubsub set
+        if (!job.data.initialJob || !job.data.initialJob.options.notifyFailure) {
+          this.rdb.log.error('');
+          this.rdb.log.error('--------------- RDB JOB ERROR/FAILURE ---------------');
+          this.rdb.log.error('Job: ' + job.data.runs || this.name);
+          if (err.stack) {
+            err.stack.split('\n').forEach(error => {
+              this.rdb.log.error(error);
+            });
+          }
+          this.rdb.log.error(err);
+          this.rdb.log.error('------------------------------------------------------');
+          this.rdb.log.error('');
         }
-        this.rdb.log.error(err);
-        this.rdb.log.error('------------------------------------------------------');
-        this.rdb.log.error('');
-        this.finishJob(err, null, job).then(resolve).catch(reject);
+
+        if (job.data.runs && Array.isArray(job.data.runs)) {
+          this._finishMultiJob(err, null, job).then(resolve).catch(reject);
+        } else {
+          this._finishSingleJob(err, null, job).then(resolve).catch(reject);
+        }
       };
 
       const preventStalling = () => {
@@ -219,30 +234,53 @@ class Queue {
     });
   }
 
-  /**
-   *
-   * @param err
+	/**
+   * Completes a multi job or continues to the next stage.
+   * @param error
    * @param data
    * @param job
    * @returns {Promise}
-   */
-  finishJob(err, data, job:_Job):Promise {
+   * @private
+	 */
+  _finishMultiJob(error, data, job:_Job):Promise {
     return new Promise((resolve, reject) => {
-      const status = err ? 'failed' : 'succeeded';
+      const status = error ? 'failed' : 'succeeded';
+
       const multi = this.rdb.client.multi()
                         .lrem(this.toKey('active'), 0, job.id)
                         .srem(this.toKey('stalling'), job.id);
-      const jobEvent = {
-        id: job.id,
-        event: status,
-        data: err ? err.message : data
+
+      const event = {
+        job: {
+          id: job.id,
+          worker_id: this.rdb.id,
+          status,
+          ...job.data
+        },
+        error: error,
+        output: data
       };
+
+      const currentJob = job.data.runs.shift();
+      const nextJob = job.data.runs[0];
+      let nextQueue = this.name;
+
+      // keep a record of the first job in this relay instance
+      // ssssh JSON ;p
+      if (!job.data.initialJob) {
+        job.data.initialJob = JSON.parse(job.toData());
+      }
+
+      // keep a record of the first queue in this relay instance
+      if (!job.data.initialQueue) {
+        job.data.initialQueue = this.name;
+      }
 
       if (status === 'failed') {
         if (job.options.retries > 0) {
           job.options.retries = job.options.retries - 1;
           job.status = 'retrying';
-          jobEvent.event = 'retrying';
+          event.event = 'retrying';
           multi.hset(this.toKey('jobs'), job.id, job.toData())
                .lpush(this.toKey('waiting'), job.id);
         } else {
@@ -260,15 +298,108 @@ class Queue {
         }
       }
 
-      if (this.options.sendEvents) {
-        multi.publish(this.toKey('events'), JSON.stringify(jobEvent));
+      // check if we need to relay to another job
+      if (!(job.data.runs.length === 1 || !!error)) {
+        if (isObject(nextJob)) {
+          nextQueue = nextJob.queue;
+          job.data.runs[0] = nextJob.runs;
+        } else if (job.data.initialQueue) {
+          nextQueue = job.data.initialQueue;
+        }
+
+        // add some debug data for the next job
+        // so it can tell where its call originated from
+        job.data.from_job = currentJob;
+        job.data.from_queue = this.name;
+        job.data.from_timestamp = Math.floor(Date.now() / 1000);
+
+        job.data.data = data;
+
+        this.rdb.job.create(nextQueue, job.data).save(function () {
+          multi.exec(function (errMulti) {
+            if (errMulti) {
+              return reject(errMulti);
+            }
+            return resolve({status: status, result: error ? error : data});
+          });
+        });
+      } else { // we've just finished the last job in the relay
+        if (event.error) {
+          if (job.data.initialJob.options.notifyFailure) {
+            this.rdb.publish(job.data.initialJob.options.notifyFailure, event);
+          }
+        } else if (job.data.initialJob.options.notifySuccess) {
+          this.rdb.publish(job.data.initialJob.options.notifySuccess, event);
+        }
+
+        multi.exec(function (errMulti) {
+          if (errMulti) {
+            return reject(errMulti);
+          }
+          return resolve({status: status, result: error ? error : data});
+        });
+      }
+    });
+  }
+
+  /**
+   *
+   * @param error
+   * @param data
+   * @param job
+   * @returns {Promise}
+   */
+  _finishSingleJob(error, data, job:_Job):Promise {
+    return new Promise((resolve, reject) => {
+      const status = error ? 'failed' : 'succeeded';
+
+      const multi = this.rdb.client.multi()
+                        .lrem(this.toKey('active'), 0, job.id)
+                        .srem(this.toKey('stalling'), job.id);
+
+      const event = {
+        job: {
+          id: job.id,
+          worker_id: this.rdb.id,
+          status,
+          ...job.data
+        },
+        error: error,
+        output: data
+      };
+
+      if (status === 'failed') {
+        if (job.options.retries > 0) {
+          job.options.retries = job.options.retries - 1;
+          job.status = 'retrying';
+          multi.hset(this.toKey('jobs'), job.id, job.toData())
+               .lpush(this.toKey('waiting'), job.id);
+        } else {
+          job.status = 'failed';
+          multi.hset(this.toKey('jobs'), job.id, job.toData())
+               .sadd(this.toKey('failed'), job.id);
+        }
+      } else {
+        job.status = 'succeeded';
+        multi.hset(this.toKey('jobs'), job.id, job.toData());
+        if (this.options.removeOnSuccess) {
+          multi.hdel(this.toKey('jobs'), job.id);
+        } else {
+          multi.sadd(this.toKey('succeeded'), job.id);
+        }
+      }
+
+      if (event.error) {
+        if (job.options.notifyFailure) this.rdb.publish(job.options.notifyFailure, event);
+      } else if (job.options.notifySuccess) {
+        this.rdb.publish(job.options.notifySuccess, event);
       }
 
       multi.exec(function (errMulti) {
         if (errMulti) {
           return reject(errMulti);
         }
-        return resolve({status: status, result: err ? err : data});
+        return resolve({status: status, result: error ? error : data});
       });
     });
   }
@@ -298,9 +429,7 @@ class Queue {
         return;
       }
 
-      // invariant: in this code path, this.running < this.concurrency, always
-      // after spoolup, this.running + this.queued === this.concurrency
-      this.getNextJob().then(job => {
+      this._getNextJob().then(job => {
         this.running = this.running + 1;
         this.queued = this.queued - 1;
 
@@ -309,7 +438,7 @@ class Queue {
           setImmediate(jobTick);
         }
 
-        this.runJob(job).then(result => {
+        this._runJob(job).then(result => {
           this.running = this.running - 1;
           this.queued = this.queued + 1;
           this.emit(result.status, job, result.result);
