@@ -24,9 +24,9 @@
  *
  */
 
-import { Logger, transports } from 'winston';
-import { readdirSync, statSync } from 'fs';
-import { createHash } from 'crypto';
+import {Logger, transports} from 'winston';
+import {readdirSync, statSync} from 'fs';
+import {createHash} from 'crypto';
 
 export function sha1sum(data) {
   return createHash('sha1')
@@ -34,18 +34,31 @@ export function sha1sum(data) {
     .digest('hex');
 }
 
+/**
+ * Get the current unix timestamp
+ * @param date
+ * @returns {number}
+ */
+export function getTimeStamp(date) {
+  return Math.floor((date || Date.now()) / 1000);
+}
 
+/**
+ *
+ * @param obj
+ * @param path
+ * @returns {*}
+ */
 export function deepGet(obj, path) {
   path.split('.').forEach(function (key) {
     if (!obj || !hasOwnProperty.call(obj, key)) {
-      obj = undefined;
+      obj = null;
       return;
     }
     obj = obj[key];
   });
   return obj;
 }
-
 
 /**
  * @description Quick implementation of lodash's 'after' function
@@ -154,16 +167,15 @@ export function mergeDeep(target, source) {
   if (isObject(target) && isObject(source)) {
     Object.keys(source).forEach(key => {
       if (isObject(source[key])) {
-        if (!target[key]) Object.assign(target, { [key]: {} });
+        if (!target[key]) Object.assign(target, {[key]: {}});
         mergeDeep(target[key], source[key]);
       } else {
-        Object.assign(target, { [key]: source[key] });
+        Object.assign(target, {[key]: source[key]});
       }
     });
   }
   return target;
 }
-
 
 /**
  * Crude function to require all module folders in /modules.

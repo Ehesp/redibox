@@ -86,7 +86,7 @@ class Job {
         this.rdb.log.verbose(`Saved job for ${this.queue.name}`);
         if (id === 0 && this.options.unique) {
           this.duplicate = true;
-          return cb(new Error('Duplicate Job')); // TODO improve on this error message.
+          return cb(new Error('Duplicated Job')); // TODO improve on this error message.
         }
         if (err) return cb(err);
         this.id = id;

@@ -1,4 +1,5 @@
 const Rbox = require('./../lib').default;
+var cuid = require('cuid');
 //const mergeDeep = require('./../lib/helpers').mergeDeep;
 //const Benchmark = require('benchmark');
 
@@ -55,7 +56,10 @@ const RediBox = new Rbox({
     prefix: 'job',
     enabled: true,
     queues: [
-      {name: 'test', concurrency: 25}
+      {name: 'test', concurrency: 25},
+      {name: 'test1', concurrency: 25},
+      {name: 'test2', concurrency: 25},
+      {name: 'meow', concurrency: 25}
     ]
   },
   cache: {
@@ -75,77 +79,147 @@ RediBox.on('error', function (error) {
 RediBox.on('ready', function (status) {
   RediBox.log.info(`Client status is: ${status.client}`);
 
+  RediBox.clusterExec('flushall').then(function (flushResult) {
+    console.dir(flushResult);
+  }, function (err) {
+    console.error(err);
+  });
+
   // Test job runner
   global.test = function () {
-    console.dir(this.data); // bound by default but also the first arg sent to this func
     return new Promise(function (resolve, reject) {
-      console.log('My test job Ran');
-      return resolve();
+      return resolve({test: '0123456 chickens'});
       // if rejected the job with mark as failure and retry the job if `retries` is set.
     });
   };
 
-  // create a test job
-  RediBox.job.create('test', { // queue name to send the job to
-    // the global function name that can handle this job,
-    // can even be dot notated e.g. test.obj.something.runner
-    // running via globals is optional, the other way is to
-    // pass a `handler` function to the individual quw
-    runs: 'test',
+  global.testPart1 = function () {
+    return new Promise(function (resolve, reject) {
+      return resolve({part1: '1'});
+      // if rejected the job with mark as failure and retry the job if `retries` is set.
+    });
+  };
 
-    // some data to send along
-    data: {
-      foo: 'bar'
-    }
-  }).retries(3).save();
+  global.testPart2 = function () {
+    return new Promise(function (resolve, reject) {
+      return resolve({part2: '2'});
+      // if rejected the job with mark as failure and retry the job if `retries` is set.
+    });
+  };
+
+  global.testSomeOtherQueue = function () {
+    return new Promise(function (resolve, reject) {
+      return resolve({testSomeOtherQueue: 'lolcats'});
+      // if rejected the job with mark as failure and retry the job if `retries` is set.
+    });
+  };
+
+  global.testPart3 = function () {
+    return new Promise(function (resolve, reject) {
+      return resolve({part3: '3'});
+      // if rejected the job with mark as failure and retry the job if `retries` is set.
+    });
+  };
+
+  RediBox.job
+         .create('test', { // queue name to send the job to
+           // the global function name that can handle this job,
+           // can even be dot notated e.g. test.obj.something.runner
+           // running via globals is optional, the other way is to
+           // pass a `handler` function to the individual quw
+           runs: 'test',
+
+           // some data to send along
+           data: {
+             foo: 'RAAARRRRR'
+           }
+         })
+         .retries(3)
+         .onSuccess(function (job) {
+           console.dir(job);
+         }).onFailure(function (job) {
+    console.dir(job);
+  }).save();
+
+  // create a test job
+  // queue name to send the job to
+  // the global function name that can handle this job,
+  // can even be dot notated e.g. test.obj.something.runner
+  // running via globals is optional, the other way is to
+  // pass a `handler` function to the individual quw
+
+  global.testMultiJob = function () {
+    RediBox.job.create('test', {
+             runs: [
+               'test',
+               {queue: 'test1', runs: 'testPart1'},
+               {queue: 'test2', runs: 'testPart2'},
+               {queue: 'meow', runs: 'testSomeOtherQueue'},
+               'testPart3'
+             ],
+             // some initial data to send along
+             data: {
+               foo: 'bar'
+             }
+           })
+           .onSuccess(function (job) {
+             console.timeEnd('MULTI');
+             console.log('ALL JOBS RAN, FINAL RESULT: ');
+             console.dir(job);
+           }).onFailure(function (job) {
+             console.log('FAILED FAILED FAILED FAILED');
+             console.dir(job);
+           })
+           .save(function () {
+             console.time('MULTI');
+           });
+  };
+
   // optionally to force unique jobs (based on data sha1sum) use .unique(true); an error
   // will be sent to the save callback if not unique
-
 
   // TESTING PUBSUB:
 
   // on message received listener
-  const myListener = function (message) {
-    console.dir(message.data); // HELLO but not GOODBYE
-  };
+  //const myListener = function (message) {
+  //  console.dir(message.data); // HELLO but not GOODBYE
+  //};
 
-  RediBox.subscribe('getMeSomeDataMrWorkerServer', myListener, function (err) {
-    if (!err) {
-      RediBox.publish('getMeSomeDataMrWorkerServer', 'HELLO');
-      // some time later on:
-      setTimeout(function () {
-        RediBox.unsubscribe('getMeSomeDataMrWorkerServer', myListener);
-        RediBox.publish('getMeSomeDataMrWorkerServer', 'GOODBYE');
-      }, 2000);
-    }
-  });
-
-
-  RediBox.subscribeOnce([
-    'requestID-123456:request:dataPart1',
-    'requestID-123456:request:dataPart2',
-    'requestID-123456:request:dataPart3'
-  ], function (message) { // on message received
-    if (message.timeout) {
-      return console.error(new Error(`Sub once to channel ${message.channel} timed out! =( `));
-    }
-    console.log('I received a message \\o/:');
-    console.dir(message.channel); // channel name
-    console.dir(message.timestamp); // when the message wa received
-    console.dir(message.data); // JSON parsed data
-  }, function (err) { // subscribed callback
-    if (!err) {
-      console.log('Subscribed once to multiple channels!');
-
-      // test publish to just one channel, the rest will timeout
-      // this is normally sent from somewhere else
-      RediBox.publish('requestID-123456:request:dataPart1', {
-        someArray: [1, 2, 3, 4, 5],
-        somethingElse: 'foobar'
-      });
-    }
-  }, 3000); // I want an event back within 3 seconds for each channel ( so each has 3 secs to respond )
-
+  //RediBox.subscribe('getMeSomeDataMrWorkerServer', myListener, function (err) {
+  //  if (!err) {
+  //    RediBox.publish('getMeSomeDataMrWorkerServer', 'HELLO');
+  //    // some time later on:
+  //    setTimeout(function () {
+  //      RediBox.unsubscribe('getMeSomeDataMrWorkerServer', myListener);
+  //      RediBox.publish('getMeSomeDataMrWorkerServer', 'GOODBYE');
+  //    }, 2000);
+  //  }
+  //});
+  //
+  //RediBox.subscribeOnce([
+  //  'requestID-123456:request:dataPart1',
+  //  'requestID-123456:request:dataPart2',
+  //  'requestID-123456:request:dataPart3'
+  //], function (message) { // on message received
+  //  if (message.timeout) {
+  //    return console.error(new Error(`Sub once to channel ${message.channel} timed out! =( `));
+  //  }
+  //  console.log('I received a message \\o/:');
+  //  console.dir(message.channel); // channel name
+  //  console.dir(message.timestamp); // when the message wa received
+  //  console.dir(message.data); // JSON parsed data
+  //}, function (err) { // subscribed callback
+  //  if (!err) {
+  //    console.log('Subscribed once to multiple channels!');
+  //
+  //    // test publish to just one channel, the rest will timeout
+  //    // this is normally sent from somewhere else
+  //    RediBox.publish('requestID-123456:request:dataPart1', {
+  //      someArray: [1, 2, 3, 4, 5],
+  //      somethingElse: 'foobar'
+  //    });
+  //  }
+  //}, 3000); // I want an event back within 3 seconds for each channel ( so each has 3 secs to respond )
 
   //if (status.client_read) {
   //  RediBox.log.info(`Read Only: Client status is: ${status.client}`);
