@@ -8,7 +8,7 @@
 ![dev dependencies](https://img.shields.io/david/dev/salakar/redibox.svg)
 ![License](https://img.shields.io/npm/l/redibox.svg)
 
-Ultimate redis toolbox for node. Built using ES6/ES7 features and as lightweight as possible with just 2 dependencies.
+Ultimate redis toolbox for node. Built using ES6/ES7 features and as lightweight as possible with minimal dependencies.
 
 ## What can you do with RediBox?
 
@@ -20,7 +20,7 @@ and error handling.
  - **[Caching](/src/modules/cache/README.md)**, including easy wrapper helpers, e.g `wrapPromise`, `wrapWaterlineQuery` (for sails), `wrapExpressRequest`
  - **Queues** and **jobs**. Lightweight polling free design with variable concurrency per queue and live progress tracking from any server (pubsubbed). Additionally you can create relay jobs that run multiple child jobs which relay resolved data to the next job in the chain.
  - **Redis Clusters** with optional cluster scaled slave reads.
- - **Advanced** Redis **PUBSUB** such as `subscribeOnce` with a timeout.
+ - **Advanced** Redis **PUBSUB** helpers such as `subscribeOnce` and `subscribeOnceOf` with a timeout.
  - Custom **LUA Commands** bootstrapping.
 
 To see docs for each of the individual features see the [use cases](#use-cases-and-modules) section.
