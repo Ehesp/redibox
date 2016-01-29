@@ -154,6 +154,7 @@ class Queue {
         if (job._internalData) {
           job.data = job._internalData;
         }
+
         if (job.data.runs && Array.isArray(job.data.runs)) {
           this._finishMultiJob(null, data, job).then(resolve).catch(reject);
         } else {
@@ -299,7 +300,7 @@ class Queue {
       }
 
       // check if we need to relay to another job
-      if (!(job.data.runs.length === 1 || !!error)) {
+      if (!(job.data.runs.length === 0 || !!error)) {
         if (isObject(nextJob)) {
           nextQueue = nextJob.queue;
           job.data.runs[0] = nextJob.runs;
