@@ -420,40 +420,36 @@ class Queue {
 
     this.started = true;
     this.running = 0;
-    this.queued = 1;
+    this.queued = 0;
     this.concurrency = concurrency;
+    this.rdb.log.verbose(`Queue '${this.name}' - started with a concurrency of ${this.concurrency}.`);
 
     const jobTick = () => {
-      this.rdb.log.verbose(`Queue '${this.name}' job tick start.`);
+      this.queued++;
       if (this.paused) {
-        this.queued = this.queued - 1;
+        this.queued--;
         return;
       }
 
       this._getNextJob().then(job => {
-        this.running = this.running + 1;
-        this.queued = this.queued - 1;
+        this.running++;
 
-        if (this.running + this.queued < this.concurrency) {
-          this.queued = this.queued + 1;
+        if ((this.running + this.queued) < this.concurrency) {
           setImmediate(jobTick);
         }
 
-        this._runJob(job).then(result => {
-          this.running = this.running - 1;
-          this.queued = this.queued + 1;
-          this.emit(result.status, job, result.result);
+        this._runJob(job).then(() => {
+          this.running--;
+          this.queued--;
           setImmediate(jobTick);
-        }).catch(error => {
-          this.running = this.running - 1;
-          this.queued = this.queued + 1;
-          this.emit('error', error);
+        }).catch(() => {
+          this.running--;
+          this.queued--;
           setImmediate(jobTick);
         });
       }).catch(error => {
         this.rdb.log.error(error);
-        this.emit('error', error);
-        return setImmediate(jobTick);
+        setImmediate(jobTick);
       });
     };
 
