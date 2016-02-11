@@ -25,6 +25,7 @@
  */
 
 import { deprecate } from 'util';
+import Promise from 'bluebird';
 import { noop, isFunction, nodify, mergeDeep } from './../../helpers';
 
 export default class Cache {
@@ -85,7 +86,7 @@ export default class Cache {
         .catch((getError) => {
           if (getError && client.readOnly) {
             // reading via slave caused an error, lets try the master client just once.
-            return this.get(key, resolve, true); // todo callback/resolve issue here
+            return this.get(key, resolve, true); // todo callback / resolve issue here
           }
           if (getError) {
             this.redisError(getError);

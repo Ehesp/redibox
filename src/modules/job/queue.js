@@ -1,6 +1,7 @@
 import util from 'util';
 import _Job from './job';
 import {EventEmitter} from 'events';
+import Promise from 'bluebird';
 import {noop, deepGet, mergeDeep, isObject} from './../../helpers';
 
 class Queue {

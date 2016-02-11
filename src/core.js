@@ -27,6 +27,7 @@
 import Redis from 'ioredis';
 import {each} from 'async';
 import {inherits} from 'util';
+import Promise from 'bluebird';
 import {EventEmitter} from 'events';
 import {after, mergeDeep, once, noop, isObject, isFunction, createLogger, requireModules} from './helpers';
 import {hostname} from 'os';

@@ -25,6 +25,7 @@
  */
 
 import {noop, sha1sum} from './../../helpers';
+import Promise from 'bluebird';
 import cuid from 'cuid';
 
 class Job {

@@ -25,6 +25,7 @@
  */
 
 import {mergeDeep, nodify} from './../../helpers';
+import Promise from 'bluebird';
 
 export default class Throttle {
 
