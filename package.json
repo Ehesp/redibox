@@ -1,7 +1,7 @@
 {
   "name": "redibox",
   "description": "Ultimate redis toolbox for node, featuring caching, clusters, cluster scaled slave reads, locks, throttling, timeseries, additional new commands (via lua scripts) and more features! Built in ES6/ES7",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "main": "lib/core.js",
   "author": "Mike Diarmid",
   "repository": "salakar/redibox",

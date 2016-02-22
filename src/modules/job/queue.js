@@ -172,13 +172,13 @@ class Queue {
 
         handled = true;
 
-        // set the data back to internal data
+        // set the data back to internal job data
         if (job._internalData) {
           job.data = job._internalData;
         }
 
         // only log the error if no notifyFailure pubsub set
-        if (!job.data.initialJob || !job.data.initialJob.options.notifyFailure) {
+        if ((!job.data.initialJob || !job.data.initialJob.options.notifyFailure) && !Array.isArray(job.data.runs)) {
           this.rdb.log.error('');
           this.rdb.log.error('--------------- RDB JOB ERROR/FAILURE ---------------');
           this.rdb.log.error('Job: ' + job.data.runs || this.name);

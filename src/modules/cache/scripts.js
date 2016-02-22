@@ -26,7 +26,7 @@
 
 export default {
 
-	/**
+  /**
    * Not really needed due to redis `set` options, just for niceness
    */
   setNxEx: {
@@ -66,6 +66,26 @@ export default {
           return 1
         end
   `
+  },
+
+  /**
+   LPUSH mylist someelement
+   LTRIM mylist 0 99
+
+   */
+
+
+  lcap: {
+    keys: 1,
+    lua: `
+      local k = KEYS[1]
+      local element = ARGV[1]
+      local limit = tonumber(ARGV[2])
+
+      --- set list
+      redis.call("LPUSH",k,element)
+      redis.call("LTRIM", 0, limit -1)
+`
   }
 
 };
