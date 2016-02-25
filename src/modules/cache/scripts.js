@@ -84,7 +84,7 @@ export default {
 
       --- set list
       redis.call("LPUSH",k,element)
-      redis.call("LTRIM", 0, limit -1)
+      redis.call("LTRIM", k, 0, limit -1)
 `
   }
 
