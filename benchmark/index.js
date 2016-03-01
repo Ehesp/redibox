@@ -67,6 +67,9 @@ const RediBox = new Rbox({
     prefix: 'rab:cache',
     defaultTTL: 600
   },
+  schedule: {
+    enabled: true,
+  },
   log: {
     level: 'verbose'
   }

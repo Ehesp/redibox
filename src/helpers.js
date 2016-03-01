@@ -44,6 +44,29 @@ export function getTimeStamp(date) {
 }
 
 /**
+ * Throttle a functions call once per limit ms.
+ * @param func
+ * @param limit
+ * @returns {Function}
+ */
+export function throttle(func, limit) {
+  let wait = false;                  // Initially, we're not waiting
+  return function () {               // We return a throttled function
+    const args = new Array(arguments.length);
+    for (let i = 0; i < args.length; ++i) {
+      args[i] = arguments[i];
+    }
+    if (!wait) {                   // If we're not waiting
+      func.call(this, ...args);           // Execute users function
+      wait = true;               // Prevent future invocations
+      setTimeout(function () {   // After a period of time
+        wait = false;          // And allow future invocations
+      }, limit);
+    }
+  };
+}
+
+/**
  *
  * @param obj
  * @param path
@@ -156,6 +179,16 @@ export function createLogger(options:Object) {
  */
 export function isObject(item) {
   return (item && typeof item === 'object' && !Array.isArray(item) && item !== null);
+}
+
+/**
+ * Generate a random integer between two numbers
+ * @param min
+ * @param max
+ * @returns {number}
+ */
+export function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
 /**

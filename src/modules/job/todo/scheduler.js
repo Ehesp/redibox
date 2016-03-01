@@ -25,16 +25,13 @@
  */
 
 import os from 'os';
-import util from 'util';
 import Schedule from './schedule';
-import { EventEmitter } from 'events';
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
 let LOOP_DELAY = 0; // ms
-
 const HOST_NAME = os.hostname();
 const SCHEDULER_LOCK_EXPIRE = 10000; // default expire, set in case a node locks up, another can then pick it up in X ms
 const UPDATE_SCHEDULE_DELAY = 60000;
@@ -166,8 +163,7 @@ class Scheduler {
     }, 500 + (this.schedules.length * 25));
 
     // try and get a run schedules lock
-    this.client.evalsha(this.lua.shaKeys.pSetNxEx, 1,
-      this.schedulerLockKey,
+    this.client.psetnxex(this.schedulerLockKey,
       SCHEDULER_LOCK_EXPIRE,
       this.getHostLockInfo(true), (lockError, lockAcquired) => {
         if (lockError) {
@@ -175,13 +171,13 @@ class Scheduler {
           return process.nextTick(::this.schedulerLoopComplete(lockError));
         }
         if (lockAcquired) {
-         // console.log(new Date().getTime(), this.queue.name, 'Acquired scheduler lock, running schedule checks.');
+          console.log(new Date().getTime(), this.queue.name, 'Acquired scheduler lock, running schedule checks.');
           this.scheduleLockAcquired = true;
           this.processSchedules()
               .then(process.nextTick(::this.schedulerLoopComplete))
               .catch(process.nextTick(::this.schedulerLoopComplete));
         } else {
-          //console.log('Scheduler LOCKED, skipping schedule checks.');
+          console.log('Scheduler LOCKED, skipping schedule checks.');
           return process.nextTick(::this.schedulerLoopComplete);
         }
       });
@@ -221,7 +217,7 @@ class Scheduler {
    * @returns {Promise}
    */
   processSchedules() {
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async(resolve, reject) => {
       try { // async promise functions don't catch errors - lolwut
         let schedules = [];
 
@@ -292,6 +288,5 @@ class Scheduler {
 
 }
 
-util.inherits(Scheduler, EventEmitter);
 export default Scheduler;
 
