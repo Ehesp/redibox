@@ -28,9 +28,11 @@ import Redis from 'ioredis';
 import {each} from 'async';
 import {inherits} from 'util';
 import Promise from 'bluebird';
+import cuid from 'cuid';
 import {EventEmitter} from 'events';
 import {after, mergeDeep, once, noop, isObject, isFunction, createLogger, requireModules} from './helpers';
 import {hostname} from 'os';
+const HOST_NAME = hostname();
 
 class RediBox { // inherits EventEmitter doesn't quite work yet =/
 
@@ -48,7 +50,7 @@ class RediBox { // inherits EventEmitter doesn't quite work yet =/
 
     // unique name of this instance, useful for targeted pubsub / ipc for modules
     // to communicate to other instances - i.e. pause a queue on all instances.
-    this.id = hostname() + '.' + (Date.now() + Math.random().toString(36));
+    this.id = cuid();
 
     // keep a timestamp of when we started
     this.boot_timestamp = Date.now();
@@ -193,6 +195,20 @@ class RediBox { // inherits EventEmitter doesn't quite work yet =/
       this.log.verbose(`${readOnly ? 'Read only' : 'Read/write'} redis client '${clientName}' is ready!`);
       return reportReady();
     });
+  }
+
+  hostInfo() {
+    return {
+      id: this.id,
+      process: {
+        pid: process.pid,
+        title: process.title,
+        uptime: process.uptime(),
+        hostname: HOST_NAME
+      },
+      timestamp: new Date().getTime(),
+      timestamp_human: new Date()
+    };
   }
 
   /**

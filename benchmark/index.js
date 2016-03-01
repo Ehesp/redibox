@@ -22,6 +22,7 @@ var cuid = require('cuid');
 const RediBox = new Rbox({
   redis: {
     cluster: true,
+    prefix: 'test',
     clusterScaleReads: false,
     subscriber: true, // enables pubsub subscriber client
     publisher: true,  // enables pubsub publisher client
@@ -57,9 +58,9 @@ const RediBox = new Rbox({
     enabled: true,
     queues: [
       {name: 'test', concurrency: 25},
-      {name: 'test1', concurrency: 25},
-      {name: 'test2', concurrency: 25},
-      {name: 'meow', concurrency: 25}
+      // {name: 'test1', concurrency: 25},
+      // {name: 'test2', concurrency: 25},
+      // {name: 'meow', concurrency: 25}
     ]
   },
   cache: {
@@ -87,6 +88,13 @@ RediBox.on('ready', function (status) {
   }, function (err) {
     console.error(err);
   });
+
+
+  setTimeout(function () {
+    RediBox.publish(RediBox.toKey('scheduler:schedule:events'), RediBox.hostInfo());
+  }, 15000)
+
+
 
   // Test job runner
   global.test = function () {
@@ -124,25 +132,25 @@ RediBox.on('ready', function (status) {
     });
   };
 
-  RediBox.job
-         .create('test', { // queue name to send the job to
-           // the global function name that can handle this job,
-           // can even be dot notated e.g. test.obj.something.runner
-           // running via globals is optional, the other way is to
-           // pass a `handler` function to the individual quw
-           runs: 'test',
-
-           // some data to send along
-           data: {
-             foo: 'RAAARRRRR'
-           }
-         })
-         .retries(3)
-         .onSuccess(function (job) {
-           console.dir(job);
-         }).onFailure(function (job) {
-    console.dir(job);
-  }).save();
+  // RediBox.job
+  //        .create('test', { // queue name to send the job to
+  //          // the global function name that can handle this job,
+  //          // can even be dot notated e.g. test.obj.something.runner
+  //          // running via globals is optional, the other way is to
+  //          // pass a `handler` function to the individual quw
+  //          runs: 'test',
+  //
+  //          // some data to send along
+  //          data: {
+  //            foo: 'RAAARRRRR'
+  //          }
+  //        })
+  //        .retries(3)
+  //        .onSuccess(function (job) {
+  //          console.dir(job);
+  //        }).onFailure(function (job) {
+  //   console.dir(job);
+  // }).save();
 
   // create a test job
   // queue name to send the job to
@@ -151,32 +159,32 @@ RediBox.on('ready', function (status) {
   // running via globals is optional, the other way is to
   // pass a `handler` function to the individual quw
 
-  global.testMultiJob = function () {
-    RediBox.job.create('test', {
-             runs: [
-               'test',
-               {queue: 'test1', runs: 'testPart1'},
-               {queue: 'test2', runs: 'testPart2'},
-               {queue: 'meow', runs: 'testSomeOtherQueue'},
-               'testPart3'
-             ],
-             // some initial data to send along
-             data: {
-               foo: 'bar'
-             }
-           })
-           .onSuccess(function (job) {
-             console.timeEnd('MULTI');
-             console.log('ALL JOBS RAN, FINAL RESULT: ');
-             console.dir(job);
-           }).onFailure(function (job) {
-             console.log('FAILED FAILED FAILED FAILED');
-             console.dir(job);
-           })
-           .save(function () {
-             console.time('MULTI');
-           });
-  };
+  // global.testMultiJob = function () {
+  //   RediBox.job.create('test', {
+  //            runs: [
+  //              'test',
+  //              {queue: 'test1', runs: 'testPart1'},
+  //              {queue: 'test2', runs: 'testPart2'},
+  //              {queue: 'meow', runs: 'testSomeOtherQueue'},
+  //              'testPart3'
+  //            ],
+  //            // some initial data to send along
+  //            data: {
+  //              foo: 'bar'
+  //            }
+  //          })
+  //          .onSuccess(function (job) {
+  //            console.timeEnd('MULTI');
+  //            console.log('ALL JOBS RAN, FINAL RESULT: ');
+  //            console.dir(job);
+  //          }).onFailure(function (job) {
+  //            console.log('FAILED FAILED FAILED FAILED');
+  //            console.dir(job);
+  //          })
+  //          .save(function () {
+  //            console.time('MULTI');
+  //          });
+  // };
 
   // optionally to force unique jobs (based on data sha1sum) use .unique(true); an error
   // will be sent to the save callback if not unique

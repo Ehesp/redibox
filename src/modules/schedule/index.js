@@ -24,14 +24,12 @@
  *
  */
 
-import {hostname} from 'os';
-import {mergeDeep, randomInt} from './../../helpers';
+import {mergeDeep} from './../../helpers';
 import Schedule from './schedule';
 
-const LOOP_DELAY = 700; // ms
-const HOST_NAME = hostname();
+const LOOP_DELAY = 500; // ms
 const SCHEDULER_LOCK_EXPIRE = 10000; // default expire, set in case a node locks up, another can then pick it up in X ms
-const UPDATE_SCHEDULE_DELAY = 450000; // once per 50 secs
+const UPDATE_SCHEDULE_DELAY = 10000; // once per 10 secs
 
 export default class Scheduler {
   constructor(options, rdb) {
@@ -56,7 +54,7 @@ export default class Scheduler {
     this._scheduleLockAcquired = false;
     this._preventStallingTimeout = null;
     this._preventGatherStallingTimeout = null;
-    this.rdb.subscribe(this.rdb.toKey('scheduler:schedule:created'), ::this._newScheduleCreatedEvent);
+    this.rdb.subscribe(this.rdb.toKey('scheduler:schedule:events'), ::this._onScheduleEvent);
     this.start();
   }
 
@@ -84,16 +82,15 @@ export default class Scheduler {
       clearTimeout(this._timer);
       clearTimeout(this._preventStallingTimeout);
     } else {
+      // keep trying every 250ms until stopped
       setTimeout(this.stop, 250);
     }
   }
 
-  _newScheduleCreatedEvent(event) {
-    this._gatherSchedules(true)
-        .then(function () {
-
-        })
-    console.dir(event);
+  _onScheduleEvent(event) {
+      console.log(event.channel);
+      console.log(event.data);
+      console.log(event.timestamp);
   }
 
   /**
@@ -134,13 +131,13 @@ export default class Scheduler {
       if (this._running) {
         // if no schedules then lets not be spammy eh
         // will revert back to faster loops when we have schedules
-        if (!this._schedules.length) {
-          delay = 3000;
+        if (!Object.keys(this._schedules).length) {
+          delay = 5000;
         }
         // if there was an error in the last loop lets delay it a little to prevent
         // spammy errors should redis connection die or various server issues
         if (error) {
-          //this.emit('error', error);
+          this.rdb.log.error(error);
           delay = delay + 1000;
         }
         // set next scheduler loop timeout
@@ -164,12 +161,12 @@ export default class Scheduler {
     this._preventStallingTimeout = setTimeout(() => {
       this._stalled = true;
       process.nextTick(::this._schedulerLoopComplete);
-    }, 500 + (Object.keys(this._schedules).length * 25));
+    }, 100 + (Object.keys(this._schedules).length * 15));
 
     // try and get a run schedules lock
     this.rdb.client.psetnxex(this._schedulerLockKey,
       SCHEDULER_LOCK_EXPIRE,
-      this._getHostLockInfo(true), (lockError, lockAcquired) => {
+      this._getLockInfo(true), (lockError, lockAcquired) => {
         if (lockError) {
           sails.log.error(lockError);
           return process.nextTick(::this._schedulerLoopComplete(lockError));
@@ -193,18 +190,9 @@ export default class Scheduler {
    * @param json
    * @returns
    */
-  _getHostLockInfo(json) {
-    const info = {
-      locked_by: {
-        id: this.rdb.id,
-        pid: process.pid,
-        title: process.title,
-        host: HOST_NAME
-      },
-      timestamp: new Date().getTime()
-    };
-    if (json) return JSON.stringify(info);
-    return info;
+  _getLockInfo(json) {
+    if (json) return JSON.stringify(this.rdb.hostInfo());
+    return this.rdb.hostInfo();
   }
 
   /**
@@ -213,16 +201,18 @@ export default class Scheduler {
    */
   _processSchedules() {
     return new Promise((resolve, reject) => {
-      this._gatherSchedules(false).then(function (schedules) {
-        if (!schedules || !schedules.length) {
-          return resolve();
+      this.rdb.log.verbose('Running _processSchedules.');
+      this._gatherSchedules(false).then((schedules) => {        // TODO run schedules
+         if (!schedules || !schedules.length) {
+           this.rdb.log.verbose('No Schedules!');
+           return resolve();
         }
 
-        // TODO run schedules
+        this.rdb.log.verbose('Found schedules to process!');
         this.rdb.log.info(schedules);
 
-        return resolve();
 
+        return resolve();
       }).catch(reject);
 
     });
@@ -241,6 +231,7 @@ export default class Scheduler {
       if (force || new Date() - this._schedulesLastUpdated >= UPDATE_SCHEDULE_DELAY) {
         const gatherComplete = () => {
           if (!resolved) {
+            this.rdb.log.verbose('Gathered schedules from REDIS');
             resolved = true;
             clearTimeout(this._preventGatherStallingTimeout);
             return resolve(this._schedules);
@@ -257,6 +248,7 @@ export default class Scheduler {
           }
         });
       } else {
+        this.rdb.log.verbose('Gathered schedules from CACHE');
         return resolve(this._schedules);
       }
     });
