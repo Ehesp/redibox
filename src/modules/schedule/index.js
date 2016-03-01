@@ -88,11 +88,10 @@ export default class Scheduler {
     }
   }
 
-
   _newScheduleCreatedEvent(event) {
     this._gatherSchedules(true)
         .then(function () {
-          
+
         })
     console.dir(event);
   }
@@ -182,6 +181,7 @@ export default class Scheduler {
               .then(process.nextTick(::this._schedulerLoopComplete))
               .catch(process.nextTick(::this._schedulerLoopComplete));
         } else {
+          this._scheduleLockAcquired = false;
           this.rdb.log.info('Scheduler LOCKED, skipping schedule checks.');
           return process.nextTick(::this._schedulerLoopComplete);
         }
@@ -212,16 +212,8 @@ export default class Scheduler {
    * @returns {Promise}
    */
   _processSchedules() {
-    return new Promise(async(resolve, reject) => {
-      try { // async promise functions don't catch errors - lolwut
-        let schedules = [];
-
-        try {
-          schedules = await this._gatherSchedules(false);
-        } catch (_gatherSchedulesError) {
-          return reject(_gatherSchedulesError);
-        }
-console.dir(schedules);
+    return new Promise((resolve, reject) => {
+      this._gatherSchedules(false).then(function (schedules) {
         if (!schedules || !schedules.length) {
           return resolve();
         }
@@ -230,9 +222,9 @@ console.dir(schedules);
         this.rdb.log.info(schedules);
 
         return resolve();
-      } catch (PromiseError) {
-        return reject(PromiseError);
-      }
+
+      }).catch(reject);
+
     });
   }
 
@@ -249,7 +241,6 @@ console.dir(schedules);
       if (force || new Date() - this._schedulesLastUpdated >= UPDATE_SCHEDULE_DELAY) {
         const gatherComplete = () => {
           if (!resolved) {
-            console.error('GATHER COMPLETEEEEEEE');
             resolved = true;
             clearTimeout(this._preventGatherStallingTimeout);
             return resolve(this._schedules);

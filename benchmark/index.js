@@ -68,7 +68,7 @@ const RediBox = new Rbox({
     defaultTTL: 600
   },
   schedule: {
-    enabled: true,
+    enabled: true
   },
   log: {
     level: 'verbose'
