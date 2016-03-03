@@ -38,7 +38,6 @@ export default class Schedule {
       stopAt: false,
       stopIn: false,
       repeat: false,
-      every: false,
       times: false
     }, scheduleOptions);
     return this;
@@ -64,13 +63,11 @@ export default class Schedule {
     return this;
   }
 
-  repeat(bool:boolean) {
-    this.options.repeat = bool;
+  repeat(time) {
+    if (time) {
+      this.options.repeat = interval.human(time);
+    }
     return this;
-  }
-
-  every(time) {
-    this.options.every = interval.human(time);
   }
 
   static validateTimeAtInput(time) {

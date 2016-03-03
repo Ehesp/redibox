@@ -29,7 +29,7 @@ import Schedule from './schedule';
 
 const LOOP_DELAY = 500; // ms
 const SCHEDULER_LOCK_EXPIRE = 10000; // default expire, set in case a node locks up, another can then pick it up in X ms
-const UPDATE_SCHEDULE_DELAY = 10000; // once per 10 secs
+const UPDATE_SCHEDULE_DELAY = 120000; // once per 2 mins
 
 export default class Scheduler {
   constructor(options, rdb) {
@@ -40,14 +40,14 @@ export default class Scheduler {
     };
 
     mergeDeep(this.options, options);
-
     this.rdb.log.verbose(`${this.constructor.name} module has been mounted!`);
 
+    // internals
     this._timer = null;
     this._running = false;
     this._stalled = false;
     this._completed = false;
-    this._schedules = {}; // local cache of schedules - will update once every minute
+    this._schedules = new Map(); // local cache of schedules - will update once every minute
     this._lastStartedAt = new Date();
     this._schedulerLockKey = this.rdb.toKey('scheduler:lock');
     this._schedulesLastUpdated = new Date();
@@ -59,7 +59,7 @@ export default class Scheduler {
   }
 
   /**
-   *
+   * Start the scheduler, if not already running.
    */
   start() {
     if (!this._running) {
@@ -87,10 +87,94 @@ export default class Scheduler {
     }
   }
 
+  /**
+   * Create a copy of a schedule locally if it doesn't already exist
+   * @param schedule
+   * @private
+   */
+  _onCreateScheduleEvent(schedule) {
+    if (schedule && schedule.id && !this._schedules.has(schedule.id)) {
+      this._schedules.set(schedule.id, schedule);
+    }
+  }
+
+  /**
+   * Delete a local copy of a schedule
+   * @param schedule
+   * @private
+   */
+  _onDeleteScheduleEvent(schedule) {
+    if (schedule && schedule.id && this._schedules.has(schedule.id)) {
+      this._schedules.delete(schedule.id);
+    }
+  }
+
+  /**
+   * Delete a local copy of a schedule
+   * @param schedule
+   * @private
+   */
+  _onUpdateScheduleEvent(schedule) {
+    if (schedule && schedule.id && this._schedules.has(schedule.id)) {
+      this._schedules.set(schedule.id, schedule);
+    }
+  }
+
+  /**
+   * Just a wrapper to distribute specific schedule events to their own handlers.
+   * @param event
+   * @private
+   */
   _onScheduleEvent(event) {
-      console.log(event.channel);
-      console.log(event.data);
-      console.log(event.timestamp);
+    if ((new Date() - event.timestamp) >= UPDATE_SCHEDULE_DELAY) {
+      switch (event.data.action) {
+        case 'create':
+          this._onCreateScheduleEvent(event.data.schedule);
+          break;
+        case 'update':
+          this._onUpdateScheduleEvent(event.data.schedule);
+          break;
+        case 'delete':
+          this._onDeleteScheduleEvent(event.data.schedule);
+          break;
+        default:
+        // do nothing
+      }
+    }
+
+    //data.event_type
+    /*
+     create
+     - update local schedules
+     OR push to local cache
+     update
+     - update local schedules
+     delete
+     - remove from local cache
+
+     {
+     'schedule-id' : { data }
+     'schedule-id2' : { data }
+     'schedule-id3' : { data }
+
+     // DATA:
+
+     {
+     config: {
+     start, -- null = NOW
+     stop   -- null = indefinite
+     repeat -- false = once -- else value interval
+     times  -- null = indefinite or ONCE  if no repeat - if 1, set to null.
+     },
+     task: {
+
+
+     }
+     }
+
+
+     }
+     */
   }
 
   /**
@@ -147,7 +231,7 @@ export default class Scheduler {
   }
 
   /**
-   *
+   * Internal scheduler loop.
    * @private
    */
   _schedulerLoop() {
@@ -186,7 +270,7 @@ export default class Scheduler {
   }
 
   /**
-   *
+   * Returns information about this instance of rdb & node.
    * @param json
    * @returns
    */
@@ -196,21 +280,21 @@ export default class Scheduler {
   }
 
   /**
-   *
+   * Iterate over schedules and check which ones need to be run.
    * @returns {Promise}
    */
   _processSchedules() {
     return new Promise((resolve, reject) => {
       this.rdb.log.verbose('Running _processSchedules.');
-      this._gatherSchedules(false).then((schedules) => {        // TODO run schedules
-         if (!schedules || !schedules.length) {
-           this.rdb.log.verbose('No Schedules!');
-           return resolve();
+      this._gatherSchedules(false).then((schedules) => {
+        if (!schedules || !schedules.length) {
+          this.rdb.log.verbose('No Schedules!');
+          return resolve();
         }
 
+        // TODO run schedules
         this.rdb.log.verbose('Found schedules to process!');
         this.rdb.log.info(schedules);
-
 
         return resolve();
       }).catch(reject);
@@ -228,7 +312,7 @@ export default class Scheduler {
   _gatherSchedules(force:boolean) {
     let resolved = false;
     return new Promise((resolve) => {
-      if (force || new Date() - this._schedulesLastUpdated >= UPDATE_SCHEDULE_DELAY) {
+      if (force || (new Date() - this._schedulesLastUpdated >= UPDATE_SCHEDULE_DELAY)) {
         const gatherComplete = () => {
           if (!resolved) {
             this.rdb.log.verbose('Gathered schedules from REDIS');
@@ -238,7 +322,7 @@ export default class Scheduler {
           }
         };
 
-        this._preventGatherStallingTimeout = setTimeout(gatherComplete, 2000);
+        this._preventGatherStallingTimeout = setTimeout(gatherComplete, 3000);
 
         this.rdb.client.hgetall(this.rdb.toKey(`scheduler:schedules`), (err, schedules) => {
           this._schedules = schedules;
@@ -255,7 +339,7 @@ export default class Scheduler {
   }
 
   /**
-   *
+   * Create a new schedule - // TODO move out into own schedule api.
    * @param name
    * @param options
    * @returns {Schedule}

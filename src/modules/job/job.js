@@ -30,37 +30,52 @@ import cuid from 'cuid';
 
 class Job {
 
-  constructor(queue, jobId, data = {}, options = {
+  constructor(rdb, id, data = {}, options = {
     unique: false,
     timeout: 60000 // 1 minute default timeout
-  }) {
-    this.queue = queue;
-    this.rdb = this.queue.rdb;
-    this.id = jobId;
-    this.duplicate = false;
-    this.progress = 0;
+  }, queueName) {
+    this.id = id;
+    this.rdb = rdb;
     this.data = data;
-    this.options = options;
-    this.subscriptions = [];
     this.status = 'created';
+    this.options = options;
+    this.progress = 0;
+    this.duplicate = false;
+    this.queueName = queueName;
+    this.subscriptions = [];
   }
 
-  static fromId(queue, jobId) {
+	/**
+   *
+   * @param queue
+   * @param id
+   */
+  static fromId(queue, id) {
     return new Promise(function (resolve, reject) {
-      queue.rdb.client.hget(queue.toKey('jobs'), jobId, function (err, data) {
+      queue.rdb.client.hget(queue.toKey('jobs'), id, function (err, data) {
         if (err) return reject(err);
-        return resolve(Job.fromData(queue, jobId, data));
+        return resolve(Job.fromData(queue, id, data));
       });
     });
   }
 
-  static fromData(queue, jobId, data) {
+	/**
+   *
+   * @param queue
+   * @param id
+   * @param data
+   * @returns {Job}
+	 */
+  static fromData(queue, id, data) {
     // TODO possible error on redis flush / failure JSON parsed .data object null.
-    const job = new Job(queue, jobId, JSON.parse(data).data, JSON.parse(data).options);
+    const job = new Job(queue.rdb, id, JSON.parse(data).data, JSON.parse(data).options, queue.name);
     job.status = data.status;
     return job;
   }
 
+	/**
+   *
+   */
   toData() {
     return JSON.stringify({
       id: this.id,
@@ -98,6 +113,11 @@ class Job {
     );
   }
 
+	/**
+   *
+   * @param cb
+   * @returns {*}
+   */
   save(cb = noop) {
     this.id = this.queue.name + '-' + (this.options.unique ? sha1sum(this.data) : cuid());
 
@@ -149,6 +169,11 @@ class Job {
     return this;
   }
 
+	/**
+   * Set the number of times this job will retry on failure
+   * @param n
+   * @returns {Job}
+   */
   retries(n) {
     if (n < 0) {
       throw Error('Retries cannot be negative');
@@ -157,6 +182,11 @@ class Job {
     return this;
   }
 
+	/**
+   * Set the onSuccess callback and notify option
+   * @param notify
+   * @returns {Job}
+   */
   onSuccess(notify) {
     this.options.notifySuccess = true;
     this.onSuccessCallback = notify;
@@ -164,6 +194,11 @@ class Job {
     return this;
   }
 
+	/**
+   * Set the onFailure callback and notify option
+   * @param notify
+   * @returns {Job}
+   */
   onFailure(notify) {
     this.options.notifyFailure = true;
     this.onFailureCallback = notify;
@@ -176,10 +211,12 @@ class Job {
     return this;
   }
 
+	/**
+   * Set how long this job can run before it times out.
+   * @param ms
+   * @returns {Job}
+   */
   timeout(ms) {
-    if (ms < 0) {
-      throw Error('Timeout cannot be negative.'); // TODO improve error message.
-    }
     this.options.timeout = ms;
     return this;
   }
@@ -199,14 +236,26 @@ class Job {
     }), cb);
   }
 
+	/**
+   *
+   * @returns {Job.initialJob|*}
+   */
   initialJob() {
     return this._internalData.initialJob;
   }
 
+	/**
+   *
+   * @returns {Job.initialQueue|*}
+   */
   initialQueue() {
     return this._internalData.initialQueue;
   }
 
+	/**
+   *
+   * @param cb
+   */
   remove(cb = noop) {
     this.rdb.client.removejob(
       this.queue.toKey('succeeded'), this.queue.toKey('failed'), this.queue.toKey('waiting'),
@@ -214,6 +263,10 @@ class Job {
       this.id, cb);
   }
 
+	/**
+   *
+   * @param cb
+   */
   retry(cb = noop) {
     this.rdb.client.multi()
         .srem(this.queue.toKey('failed'), this.id)
@@ -221,12 +274,31 @@ class Job {
         .exec(cb);
   }
 
+	/**
+   *
+   * @param set
+   * @param cb
+   */
   isInSet(set, cb = noop) {
     this.rdb.client.sismember(this.queue.toKey(set), this.id, function (err, result) {
       if (err) return cb(err);
       return cb(null, result === 1);
     });
   }
+
+	/**
+   * Generates a queue prefixed key based on the provided string.
+   * @param str
+   * @returns {string}
+   * @private
+   */
+  _toQueueKey(str:string):string {
+    if (this.rdb.isCluster()) {
+      return `${this.options.prefix}:{${this.queueName}}:${str}`;
+    }
+    return `${this.options.prefix}:${this.queueName}:${str}`;
+  }
+
 
 }
 
