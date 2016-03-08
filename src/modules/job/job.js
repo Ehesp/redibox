@@ -24,10 +24,13 @@
  *
  */
 
-import {noop, sha1sum} from './../../helpers';
-import Promise from 'bluebird';
 import cuid from 'cuid';
+import Promise from 'bluebird';
+import {noop, sha1sum} from './../../helpers';
 
+/**
+ * @class Job
+ */
 class Job {
 
   constructor(rdb, id, data = {}, options = {
@@ -40,13 +43,13 @@ class Job {
     this.status = 'created';
     this.options = options;
     this.progress = 0;
-    this.duplicate = false;
     this.queueName = queueName;
     this.subscriptions = [];
   }
 
-	/**
-   *
+  /**
+   * Query redis for the specified job id and converts it to a new instance of Job.
+   * @static
    * @param queue
    * @param id
    */
@@ -59,22 +62,30 @@ class Job {
     });
   }
 
-	/**
-   *
+  /**
+   * Converts a JSON string of a job's data to a new instance of Job
+   * @static
    * @param queue
    * @param id
    * @param data
-   * @returns {Job}
-	 */
+   * @returns {Job | null}
+   */
   static fromData(queue, id, data) {
-    // TODO possible error on redis flush / failure JSON parsed .data object null.
-    const job = new Job(queue.rdb, id, JSON.parse(data).data, JSON.parse(data).options, queue.name);
-    job.status = data.status;
+    let obj;
+    try {
+      obj = JSON.parse(data);
+    } catch (JSONParseError) {
+      queue.rdb.log.error(`ERR_JSON: Error while parsing json string for job '${id}'.`);
+      queue.rdb.log.error(JSONParseError);
+      return null;
+    }
+    const job = new Job(queue.rdb, id, obj.data, obj.options, queue.name);
+    job.status = obj.data.status;
     return job;
   }
 
-	/**
-   *
+  /**
+   * Convert this Job instance to a json string.
    */
   toData() {
     return JSON.stringify({
@@ -86,25 +97,25 @@ class Job {
   }
 
   /**
-   * Internal saver.
+   * Internal save that pushes to redis.
    * @param cb
    * @private
    */
   _save(cb) {
-    this.rdb.log.verbose(`Saving new job ${this.id} for ${this.queue.name}`);
+    this.rdb.log.verbose(`Saving new job ${this.id} for ${this.queueName}`);
     this.rdb.client.addjob(
-      this.queue.toKey('jobs'),
-      this.queue.toKey('waiting'),
-      this.queue.toKey('id'),
+      this._toQueueKey('jobs'),
+      this._toQueueKey('waiting'),
+      this._toQueueKey('id'),
       this.toData(),
       !!this.options.unique,
       this.id, (err, id) => {
-        this.rdb.log.verbose(`Saved job for ${this.queue.name}`);
-        if (id === 0 && this.options.unique) {
-          this.duplicate = true;
-          return cb(new Error('Duplicated Job')); // TODO improve on this error message.
-        }
         if (err) return cb(err);
+        if (this.options.unique && id === 0) {
+          this.status = 'duplicate';
+          return cb(new Error(`ERR_DUPLICATE: Job ${this.id} already exists, save has been aborted.`));
+        }
+        this.rdb.log.verbose(`Saved job for ${this.queueName}`);
         this.id = id;
         this.status = 'saved';
         this.queue.jobs[id] = this;
@@ -113,13 +124,14 @@ class Job {
     );
   }
 
-	/**
-   *
+  /**
+   * Save this instance of Job to redis. Any active queues will pick it up
+   * immediately for processing.
    * @param cb
    * @returns {*}
    */
   save(cb = noop) {
-    this.id = this.queue.name + '-' + (this.options.unique ? sha1sum(this.data) : cuid());
+    this.id = this.queueName + '-' + (this.options.unique ? sha1sum(this.data) : cuid());
 
     if (this.options.notifySuccess) {
       this.options.notifySuccess = `job:${this.id}:success`;
@@ -169,7 +181,7 @@ class Job {
     return this;
   }
 
-	/**
+  /**
    * Set the number of times this job will retry on failure
    * @param n
    * @returns {Job}
@@ -182,7 +194,7 @@ class Job {
     return this;
   }
 
-	/**
+  /**
    * Set the onSuccess callback and notify option
    * @param notify
    * @returns {Job}
@@ -194,7 +206,7 @@ class Job {
     return this;
   }
 
-	/**
+  /**
    * Set the onFailure callback and notify option
    * @param notify
    * @returns {Job}
@@ -211,7 +223,7 @@ class Job {
     return this;
   }
 
-	/**
+  /**
    * Set how long this job can run before it times out.
    * @param ms
    * @returns {Job}
@@ -221,22 +233,25 @@ class Job {
     return this;
   }
 
-  // todo pub sub events to track progress
-  reportProgress(progress, cb = noop) {
+	/**
+   * Usable in the task runner for this job. Allows reporting progress back to the original
+   * job creator.
+   * @param progress
+   * @param cb
+   * @returns {*}
+   */
+  setProgress(progress, cb = noop) {
     // right now we just send the pubsub event
     // might consider also updating the job hash for persistence
-    if (Number(progress) < 0 || Number(progress) > 100) {
+    const numProgress = Number(progress);
+    if (numProgress < 0 || numProgress > 100) {
       return process.nextTick(cb.bind(null, Error('Progress must be between 0 and 100')));
     }
-    this.progress = Number(progress);
-    this.rdb.publisher.publish(this.queue.toKey('events'), JSON.stringify({
-      id: this.id,
-      event: 'progress',
-      data: progress
-    }), cb);
+    this.progress = numProgress;
+    this.rdb.publish(this._toQueueKey(`progress:${this.id}`), numProgress, cb);
   }
 
-	/**
+  /**
    *
    * @returns {Job.initialJob|*}
    */
@@ -244,7 +259,7 @@ class Job {
     return this._internalData.initialJob;
   }
 
-	/**
+  /**
    *
    * @returns {Job.initialQueue|*}
    */
@@ -252,41 +267,41 @@ class Job {
     return this._internalData.initialQueue;
   }
 
-	/**
-   *
+  /**
+   * Remove this job from all sets.
    * @param cb
    */
   remove(cb = noop) {
     this.rdb.client.removejob(
-      this.queue.toKey('succeeded'), this.queue.toKey('failed'), this.queue.toKey('waiting'),
-      this.queue.toKey('active'), this.queue.toKey('stalling'), this.queue.toKey('jobs'),
+      this._toQueueKey('succeeded'), this._toQueueKey('failed'), this._toQueueKey('waiting'),
+      this._toQueueKey('active'), this._toQueueKey('stalling'), this._toQueueKey('jobs'),
       this.id, cb);
   }
 
-	/**
-   *
+  /**
+   * Re-save this job for the purpose of retrying it.
    * @param cb
    */
   retry(cb = noop) {
     this.rdb.client.multi()
-        .srem(this.queue.toKey('failed'), this.id)
-        .lpush(this.queue.toKey('waiting'), this.id)
+        .srem(this._toQueueKey('failed'), this.id)
+        .lpush(this._toQueueKey('waiting'), this.id)
         .exec(cb);
   }
 
-	/**
-   *
+  /**
+   * Callbacks true of false if this job exists in the specified set.
    * @param set
    * @param cb
    */
   isInSet(set, cb = noop) {
-    this.rdb.client.sismember(this.queue.toKey(set), this.id, function (err, result) {
+    this.rdb.client.sismember(this._toQueueKey(set), this.id, function (err, result) {
       if (err) return cb(err);
       return cb(null, result === 1);
     });
   }
 
-	/**
+  /**
    * Generates a queue prefixed key based on the provided string.
    * @param str
    * @returns {string}
@@ -294,11 +309,10 @@ class Job {
    */
   _toQueueKey(str:string):string {
     if (this.rdb.isCluster()) {
-      return `${this.options.prefix}:{${this.queueName}}:${str}`;
+      return `${this.rdb.options.job.prefix}:{${this.queueName}}:${str}`;
     }
-    return `${this.options.prefix}:${this.queueName}:${str}`;
+    return `${this.rdb.options.job.prefix}:${this.queueName}:${str}`;
   }
-
 
 }
 

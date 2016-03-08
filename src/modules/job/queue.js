@@ -1,7 +1,7 @@
 import util from 'util';
-import _Job from './job';
-import {EventEmitter} from 'events';
+import Job from './job';
 import Promise from 'bluebird';
+import {EventEmitter} from 'events';
 import {noop, deepGet, mergeDeep, isObject} from './../../helpers';
 
 class Queue {
@@ -36,12 +36,6 @@ class Queue {
       this.rdb.log.verbose(`Block client for queue '${this.name}' is ready. Starting queue processor.`);
       this.process(this.options.concurrency);
     }, this);
-
-    // if (this.options.enableScheduler) {
-    // // todo
-    // // attach an instance of the scheduler
-    // this.scheduler = new Scheduler(this.options.scheduler, this.rdb);
-    // }
   }
 
   /**
@@ -82,8 +76,8 @@ class Queue {
    * @param data
    * @returns {Job}
    */
-  createJob(data):_Job {
-    return new _Job(this, null, data);
+  createJob(data):Job {
+    return new Job(this, null, data);
   }
 
   createSchedule(name, options) {
@@ -97,12 +91,12 @@ class Queue {
    */
   getJob(jobId:string):Promise {
     return new Promise((resolve, reject) => {
-      // check if we have the job locally in memory
       if (jobId in this.jobs) {
-        return process.nextTick(resolve.bind(null, this.jobs[jobId]));
+        // we have the job locally
+        return resolve(this.jobs[jobId]);
       }
-      // else gather from redis
-      _Job.fromId(this, jobId)
+      // not local so gather from redis
+      Job.fromId(this, jobId)
           .then(job => {
             this.jobs[jobId] = job;
             return resolve(job);
@@ -121,7 +115,7 @@ class Queue {
         this.toKey('waiting'),
         this.toKey('active'), 0, (err, jobId) => {
           if (err) return reject(err);
-          return _Job.fromId(this, jobId).then(resolve).catch(reject);
+          return Job.fromId(this, jobId).then(resolve).catch(reject);
         });
     });
   }
@@ -131,7 +125,7 @@ class Queue {
    * @param job
    * @returns {Promise}
    */
-  _runJob(job:_Job):Promise {
+  _runJob(job:Job):Promise {
     return new Promise((resolve, reject) => {
       const runs = job.data && job.data.runs && Array.isArray(job.data.runs) ? job.data.runs[0] : job.data.runs;
       const handler = (typeof this.handler === 'string' ?
@@ -244,7 +238,7 @@ class Queue {
    * @returns {Promise}
    * @private
 	 */
-  _finishMultiJob(error, data, job:_Job):Promise {
+  _finishMultiJob(error, data, job:Job):Promise {
     return new Promise((resolve, reject) => {
       const status = error ? 'failed' : 'succeeded';
 
@@ -351,7 +345,7 @@ class Queue {
    * @param job
    * @returns {Promise}
    */
-  _finishSingleJob(error, data, job:_Job):Promise {
+  _finishSingleJob(error, data, job:Job):Promise {
     return new Promise((resolve, reject) => {
       const status = error ? 'failed' : 'succeeded';
 
