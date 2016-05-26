@@ -150,7 +150,7 @@ class Queue {
           job.data = job._internalData;
         }
 
-        if (job.data.runs && Array.isArray(job.data.runs)) {
+        if (job.data.runs && Array.isArray(job.data.runs) && data !== false)) {
           this._finishMultiJob(null, data, job).then(resolve).catch(reject);
         } else {
           this._finishSingleJob(null, data, job).then(resolve).catch(reject);
